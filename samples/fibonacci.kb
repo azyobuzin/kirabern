@@ -1,0 +1,18 @@
+// フィボナッチ数列の n 項目を取得
+fn fibonacci(n: int) -> int {
+    if (n == 0) { 0 }
+    else if (n == 1) { 1 }
+    else {
+        fn f(a: int, b: int, count: int) -> int {
+            var c = a + b;
+            if (count == n) { c }
+            else { f(b, c, count + 1) }
+        }
+
+        f(0, 1, 2)
+    }
+}
+
+var n = parseInt(readLine());
+var result = fibonacci(n);
+println(intToString(result));

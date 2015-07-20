@@ -1,0 +1,87 @@
+﻿{
+module Lexer
+open System
+open Microsoft.FSharp.Text.Lexing
+open Parser
+
+let lexeme = LexBuffer<_>.LexemeString
+let newline (lexbuf: LexBuffer<_>) = lexbuf.EndPos <- lexbuf.EndPos.NextLine
+let unicodeLetter lexbuf =
+    let s = lexeme lexbuf
+    Char.ConvertFromUtf32(int(s.Substring(2, s.Length - 2)))
+}
+
+let whitespace = [' ' '\t']
+let newline = ("\n" | "\r\n")
+let digit = ['0'-'9']
+let idinit = ['a'-'z' 'A'-'Z' '_']
+
+rule token = parse
+| whitespace { token lexbuf }
+| newline { newline lexbuf; token lexbuf }
+| "while" { WHILE }
+| "for" { FOR }
+| "to" { TO }
+| "break" { BREAK }
+| "var" { VAR }
+| "fn" { FN }
+| "type" { TYPE }
+| "if" { IF }
+| "else" { ELSE }
+| "null" { NULL }
+| "," { COMMA }
+| ":" { COLON }
+| ";" { SEMICOLON }
+| "(" { LPAREN }
+| ")" { RPAREN }
+| "[" { LBRACK }
+| "]" { RBRACK }
+| "{" { LBRACE }
+| "}" { RBRACE }
+| "." { DOT }
+| "+" { PLUS }
+| "-" { MINUS }
+| "*" { TIMES }
+| "/" { DIVIDE }
+| "=" { ASSIGN }
+| "==" { EQ }
+| "!=" { NEQ }
+| "<" { LT }
+| "<=" { LE }
+| ">" { GT }
+| ">=" { GE }
+| "&&" { ANDALSO }
+| "||" { ORELSE }
+| "->" { ARROW }
+| idinit (idinit | digit)* { ID(lexeme lexbuf) }
+| digit+ { INT(int(lexeme lexbuf)) }
+| '"' { read_string "" lexbuf }
+| "//" [^ '\r' '\n']+ { token lexbuf }
+| "/*" { comment lexbuf }
+| eof { EOF }
+
+and read_string str = parse
+| '"' { STRING(str) }
+| '\\' { read_string (str + (string_escape lexbuf)) lexbuf }
+| newline { newline lexbuf; read_string (str + (lexeme lexbuf)) lexbuf }
+| eof { failwith "EOF in a string literal" }
+| _ { read_string (str + (lexeme lexbuf)) lexbuf }
+
+and string_escape = parse
+| 'b' { "\b" }
+| 'n' { "\n" }
+| 'r' { "\r" }
+| 't' { "\t" }
+| '\\' { "\\" }
+| '"' { "\"" }
+| "'" { "'" }
+| 'u' (digit digit digit digit) { unicodeLetter lexbuf }
+| 'U' (digit digit digit digit digit digit digit digit) { unicodeLetter lexbuf }
+| eof { failwith "EOF in a string literal" }
+| _ { failwith "Invalid escape character" }
+
+and comment = parse
+| "*/" { token lexbuf }
+| newline { newline lexbuf; comment lexbuf }
+| eof { failwith "EOF in an unclosed comment" }
+| _ { comment lexbuf }

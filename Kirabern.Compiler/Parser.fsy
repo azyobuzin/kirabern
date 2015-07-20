@@ -1,0 +1,16 @@
+﻿%{
+%}
+
+%token EOF
+%token WHILE FOR TO BREAK VAR FN TYPE IF ELSE NULL
+%token COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT PLUS MINUS TIMES DIVIDE ASSIGN EQ NEQ LT LE GT GE ANDALSO ORELSE ARROW
+%token <string> ID
+%token <int> INT
+%token <string> STRING
+
+%start start
+%type <unit> start
+
+%%
+
+start: EOF { () }
