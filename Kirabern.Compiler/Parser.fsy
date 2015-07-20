@@ -1,16 +1,36 @@
 ﻿%{
+open Absyn
 %}
 
 %token EOF
-%token WHILE FOR TO BREAK VAR FN TYPE IF ELSE NULL
-%token COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT PLUS MINUS TIMES DIVIDE ASSIGN EQ NEQ LT LE GT GE ANDALSO ORELSE ARROW
+    WHILE FOR TO BREAK VAR FN TYPE IF ELSE NULL
+    COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT
+    PLUS MINUS TIMES DIVIDE ASSIGN EQ NEQ LT LE GT GE ANDALSO ORELSE ARROW
 %token <string> ID
 %token <int> INT
 %token <string> STRING
 
 %start start
-%type <unit> start
+%type <Program> start
 
 %%
 
-start: EOF { () }
+start: prog { $1 }
+
+prog: exps {
+    let (l, x) = $1
+    match x with
+    | Some(x) -> l @ [x]
+    | None -> l
+}
+
+stmt: exp SEMICOLON { ($1, parseState.InputStartPosition 1) }
+
+stmts: stmt { [$1] }
+| stmt stmts { $1 :: $2 }
+| { [] }
+
+exps: stmts exp { ($1, Some($2, parseState.InputStartPosition 2)) }
+| stmts { ($1, None) }
+
+exp: EOF { NullExp }

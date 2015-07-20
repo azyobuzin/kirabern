@@ -61,7 +61,6 @@
     <FsYacc Include="Parser.fsy">
       <OtherFlags>--module Parser</OtherFlags>
     </FsYacc>
-    <Compile Include="Parser.fsi" />
     <Compile Include="Parser.fs" />
     <FsLex Include="Lexer.fsl">
       <OtherFlags>--unicode</OtherFlags>

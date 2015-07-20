@@ -4,6 +4,17 @@ type token =
   | STRING of (string)
   | INT of (int)
   | ID of (string)
+  | EOF
+  | WHILE
+  | FOR
+  | TO
+  | BREAK
+  | VAR
+  | FN
+  | TYPE
+  | IF
+  | ELSE
+  | NULL
   | COMMA
   | COLON
   | SEMICOLON
@@ -28,21 +39,21 @@ type token =
   | ANDALSO
   | ORELSE
   | ARROW
-  | WHILE
-  | FOR
-  | TO
-  | BREAK
-  | VAR
-  | FN
-  | TYPE
-  | IF
-  | ELSE
-  | NULL
-  | EOF
 type tokenId = 
     | TOKEN_STRING
     | TOKEN_INT
     | TOKEN_ID
+    | TOKEN_EOF
+    | TOKEN_WHILE
+    | TOKEN_FOR
+    | TOKEN_TO
+    | TOKEN_BREAK
+    | TOKEN_VAR
+    | TOKEN_FN
+    | TOKEN_TYPE
+    | TOKEN_IF
+    | TOKEN_ELSE
+    | TOKEN_NULL
     | TOKEN_COMMA
     | TOKEN_COLON
     | TOKEN_SEMICOLON
@@ -67,22 +78,16 @@ type tokenId =
     | TOKEN_ANDALSO
     | TOKEN_ORELSE
     | TOKEN_ARROW
-    | TOKEN_WHILE
-    | TOKEN_FOR
-    | TOKEN_TO
-    | TOKEN_BREAK
-    | TOKEN_VAR
-    | TOKEN_FN
-    | TOKEN_TYPE
-    | TOKEN_IF
-    | TOKEN_ELSE
-    | TOKEN_NULL
-    | TOKEN_EOF
     | TOKEN_end_of_input
     | TOKEN_error
 type nonTerminalId = 
     | NONTERM__startstart
     | NONTERM_start
+    | NONTERM_prog
+    | NONTERM_stmt
+    | NONTERM_stmts
+    | NONTERM_exps
+    | NONTERM_exp
 /// This function maps tokens to integer indexes
 val tagOfToken: token -> int
 
@@ -94,4 +99,4 @@ val prodIdxToNonTerminal: int -> nonTerminalId
 
 /// This function gets the name of a token as a string
 val token_to_string: token -> string
-val start : (Microsoft.FSharp.Text.Lexing.LexBuffer<'cty> -> token) -> Microsoft.FSharp.Text.Lexing.LexBuffer<'cty> -> (unit) 
+val start : (Microsoft.FSharp.Text.Lexing.LexBuffer<'cty> -> token) -> Microsoft.FSharp.Text.Lexing.LexBuffer<'cty> -> (Program) 

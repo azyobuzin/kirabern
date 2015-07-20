@@ -1,4 +1,5 @@
 ﻿#r "../packages/FsLexYacc.Runtime.6.1.0/lib/net40/FsLexYacc.Runtime.dll"
+#load "Absyn.fs"
 #load "Parser.fs"
 #load "Lexer.fs"
 
