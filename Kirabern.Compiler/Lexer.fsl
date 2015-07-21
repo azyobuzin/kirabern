@@ -26,9 +26,12 @@ rule token = parse
 | "var" { VAR }
 | "fn" { FN }
 | "type" { TYPE }
+| "new" { NEW }
 | "if" { IF }
 | "else" { ELSE }
 | "null" { NULL }
+| "true" { TRUE }
+| "false" { FALSE }
 | "," { COMMA }
 | ":" { COLON }
 | ";" { SEMICOLON }

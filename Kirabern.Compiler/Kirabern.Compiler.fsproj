@@ -10,9 +10,10 @@
     <RootNamespace>Kiraburn.Compiler</RootNamespace>
     <AssemblyName>Kirabern.Compiler</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <TargetFSharpCoreVersion>4.3.1.0</TargetFSharpCoreVersion>
+    <TargetFSharpCoreVersion>4.4.0.0</TargetFSharpCoreVersion>
     <Name>Kirabern.Compiler</Name>
     <NuGetPackageImportStamp>d3f2261b</NuGetPackageImportStamp>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -70,6 +71,7 @@
     <Content Include="app.config" />
     <Content Include="packages.config" />
     <None Include="LexerTest.fsx" />
+    <None Include="ParserTest.fsx" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FsLexYacc.Runtime">

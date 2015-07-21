@@ -11,7 +11,7 @@ Tiger 言語リファレンスマニュアルを参考に言語仕様をまと�
 または `/*` から `*/` まで。入れ子にはできない。
 
 ### キーワード
-while, for, to, break, var, fn, type, if, else, null
+while, for, to, break, var, fn, type, new, if, else, null, true, false
 
 ## 分離記号
 , : ; ( ) [ ] { } . + - * / = == != < <= > >= && || ->
@@ -34,8 +34,8 @@ while, for, to, break, var, fn, type, if, else, null
 * id : tyid { , id : tyid }
 
 ### 変数(vardec)
-* var id = exp ;
-* var id : tyid = exp ;
+* var id = exp
+* var id : tyid = exp
 
 ### 関数(fundec)
 * fn id ( tyfields ) exp （戻り値なし）
@@ -54,6 +54,7 @@ while, for, to, break, var, fn, type, if, else, null
 * null （レコード値 null）
 * { exp; exp; ... exp } （最後の値を返す）
 * { exp; exp; ... exp; } （値を返さない）
+* true(1), false(0)
 * [0-9]+
 * \- 記号
 * "文字列" （エスケープは [F#](https://msdn.microsoft.com/ja-jp/library/dd323829.aspx) と同じ）
@@ -64,7 +65,7 @@ while, for, to, break, var, fn, type, if, else, null
 * 条件演算子 &&, ||
 * new tyid { id = exp { , id = exp } } （レコード生成）
 * new tyid [ exp ] （配列生成）
-* lvalue = exp
+* lvalue = exp （左辺値を返す）
 * if ( exp ) exp
 * if ( exp ) exp else exp
 * while ( exp ) exp

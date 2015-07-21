@@ -1,9 +1,23 @@
 ﻿%{
+open Microsoft.FSharp.Text.Parsing
 open Absyn
+
+let pos (parseState: IParseState, startIdx, endIdx) =
+    (parseState.InputStartPosition startIdx, parseState.InputEndPosition endIdx)
+
+type LvaluePostfix =
+    | Field of Symbol * Pos
+    | Subscript of Exp * Pos
+
+let opexp (left, oper, right, parseState) =
+    OpExp { left = left; oper = oper; right = right; pos = pos(parseState, 1, 3) }
+
+let ifelseexp (test, then', else', pos) =
+    IfExp { test = test; then' = then'; else' = Some(else'); pos = pos }
 %}
 
 %token EOF
-    WHILE FOR TO BREAK VAR FN TYPE IF ELSE NULL
+    WHILE FOR TO BREAK VAR FN TYPE NEW IF ELSE NULL TRUE FALSE
     COMMA COLON SEMICOLON LPAREN RPAREN LBRACK RBRACK LBRACE RBRACE DOT
     PLUS MINUS TIMES DIVIDE ASSIGN EQ NEQ LT LE GT GE ANDALSO ORELSE ARROW
 %token <string> ID
@@ -13,9 +27,15 @@ open Absyn
 %start start
 %type <Program> start
 
+%nonassoc ANDALSO ORELSE
+%nonassoc EQ NEQ LT LE GT GE
+%left PLUS MINUS
+%left TIMES DIVIDE
+%left UMINUS
+
 %%
 
-start: prog { $1 }
+start: prog EOF { $1 }
 
 prog: exps {
     let (l, x) = $1
@@ -24,13 +44,113 @@ prog: exps {
     | None -> l
 }
 
-stmt: exp SEMICOLON { ($1, parseState.InputStartPosition 1) }
+stmt: exp SEMICOLON { ($1, pos(parseState, 1, 2)) }
 
 stmts: stmt { [$1] }
 | stmt stmts { $1 :: $2 }
 | { [] }
 
-exps: stmts exp { ($1, Some($2, parseState.InputStartPosition 2)) }
+exps: stmts exp { ($1, Some($2, pos(parseState, 2, 2))) }
 | stmts { ($1, None) }
 
-exp: EOF { NullExp }
+dec: tydecs { TypeDec $1 }
+| vardec { VarDec $1 }
+| fundecs { FunDec $1 }
+
+tydec: TYPE ID ASSIGN ty { { name = $2; ty = $4; pos = pos(parseState, 1, 4) } }
+
+tydecs: tydec { [$1] }
+//| tydec tydecs { $1 :: $2 }
+| tydec SEMICOLON tydecs { $1 :: $3 }
+
+tyid: ID { SimpleTyId($1, pos(parseState, 1, 1)) }
+| tyid LBRACK RBRACK { ArrayTyId $1 }
+
+ty: tyid { NameTy($1, pos(parseState, 1, 1)) }
+| LBRACE tyfields RBRACE { RecordTy $2 }
+
+tyfield: ID COLON tyid { { name = $1; escape = ref true; typ = $3; pos = pos(parseState, 1, 3) } }
+
+tyfields_: tyfield { [$1] }
+| tyfield COMMA tyfields_ { $1 :: $3 }
+
+tyfields: { [] }
+| tyfields_ { $1 }
+
+vardec: VAR ID ASSIGN exp { { name = $2; escape = ref true; typ = None; init = $4; pos = pos(parseState, 1, 4) } }
+| VAR ID COLON tyid ASSIGN exp { { name = $2; escape = ref true; typ = Some($4, pos(parseState, 4, 4)); init = $6; pos = pos(parseState, 1, 6) } }
+
+fundec: FN ID LPAREN tyfields RPAREN exp { { name = $2; params' = $4; result = None; body = $6; pos = pos(parseState, 1, 6) } }
+| FN ID LPAREN tyfields RPAREN ARROW tyid exp { { name = $2; params' = $4; result = Some($7, pos(parseState, 7, 7)); body = $8; pos = pos(parseState, 1, 8) } }
+
+fundecs: fundec { [$1] }
+//| fundec fundecs { $1 :: $2 }
+| fundec SEMICOLON fundecs { $1 :: $3 }
+
+lvalue: ID lvalue_postfix {
+    let rec varexp (left, xs) =
+        match xs with
+        | right :: tail ->
+            let newleft =
+                match right with
+                | Field(symbol, pos) -> FieldVar(left, symbol, pos)
+                | Subscript(exp, pos) -> SubscriptVar(left, exp, pos)
+            varexp(newleft, tail)
+        | [] -> left
+    varexp(SimpleVar($1, pos(parseState, 1, 1)), $2)
+}
+
+lvalue_postfix: { [] }
+| DOT ID lvalue_postfix { Field($2, pos(parseState, 2, 2)) :: $3 }
+| LBRACK exp RBRACK lvalue_postfix { Subscript($2, pos(parseState, 2, 2)) :: $4 }
+
+exp: lvalue { VarExp $1 }
+| NULL { NullExp }
+| LBRACE exps RBRACE { SeqExp $2 }
+| TRUE { IntExp 1 }
+| FALSE { IntExp 0 }
+| INT { IntExp $1 }
+| MINUS exp %prec UMINUS
+    {
+        match $2 with
+        | IntExp(x) -> IntExp(-x)
+        | x -> NegateExp(x, pos(parseState, 1, 2))
+    }
+| STRING { StringExp $1 }
+| ID LPAREN parameters RPAREN { CallExp { func = $1; args = $3; pos = pos(parseState, 1, 4) } }
+| exp PLUS exp { opexp($1, PlusOp, $3, parseState) }
+| exp MINUS exp { opexp($1, MinusOp, $3, parseState) }
+| exp TIMES exp { opexp($1, TimesOp, $3, parseState) }
+| exp DIVIDE exp { opexp($1, DivideOp, $3, parseState) }
+| exp EQ exp { opexp($1, EqOp, $3, parseState) }
+| exp NEQ exp { opexp($1, NeqOp, $3, parseState) }
+| exp LT exp { opexp($1, LtOp, $3, parseState) }
+| exp LE exp { opexp($1, LeOp, $3, parseState) }
+| exp GT exp { opexp($1, GtOp, $3, parseState) }
+| exp GE exp { opexp($1, GeOp, $3, parseState) }
+| exp ANDALSO exp { ifelseexp(($1, pos(parseState, 1, 1)), $3, IntExp 0, pos(parseState, 1, 3)) }
+| exp ORELSE exp { ifelseexp(($1, pos(parseState, 1, 1)), IntExp 1, $3, pos(parseState, 1, 3)) }
+| NEW ID LBRACE record_fields RBRACE { RecordExp { fields = $4; typ = $2; pos = pos(parseState, 1, 5) } }
+| NEW tyid LBRACK exp RBRACK { ArrayExp { typ = ($2, pos(parseState, 2, 2)); size = ($4, pos(parseState, 4, 4)); pos = pos(parseState, 1, 5) } }
+| lvalue ASSIGN exp { AssignExp { var = $1; exp = $3; pos = pos(parseState, 1, 3) } }
+| IF LPAREN exp RPAREN exp ELSE exp { ifelseexp(($3, pos(parseState, 3, 3)), $5, $7, pos(parseState, 1, 7)) }
+| IF LPAREN exp RPAREN exp { IfExp { test = ($3, pos(parseState, 3, 3)); then' = $5; else' = None; pos = pos(parseState, 1, 5) } }
+| WHILE LPAREN exp RPAREN exp { WhileExp { test = $3; body = $5; pos = pos(parseState, 1, 5) } }
+| FOR LPAREN ID ASSIGN exp TO exp RPAREN exp { ForExp { var = $3; escape = ref true; lo = $5; hi = $7; body = $9; pos = pos(parseState, 1, 9) } }
+| BREAK { BreakExp(pos(parseState, 1, 1)) }
+| LPAREN exp RPAREN { $2 }
+| dec { DecExp $1 }
+
+parameters_: exp { [$1] }
+| exp COMMA parameters_ { $1 :: $3 }
+
+parameters: { [] }
+| parameters_ { $1 }
+
+record_field: ID ASSIGN exp { ($1, $3, pos(parseState, 1, 3)) }
+
+record_fields_: record_field { [$1] }
+| record_field COMMA record_fields_ { $1 :: $3 }
+
+record_fields: { [] }
+| record_fields_ { $1 }

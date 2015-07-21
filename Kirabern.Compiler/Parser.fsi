@@ -12,9 +12,12 @@ type token =
   | VAR
   | FN
   | TYPE
+  | NEW
   | IF
   | ELSE
   | NULL
+  | TRUE
+  | FALSE
   | COMMA
   | COLON
   | SEMICOLON
@@ -51,9 +54,12 @@ type tokenId =
     | TOKEN_VAR
     | TOKEN_FN
     | TOKEN_TYPE
+    | TOKEN_NEW
     | TOKEN_IF
     | TOKEN_ELSE
     | TOKEN_NULL
+    | TOKEN_TRUE
+    | TOKEN_FALSE
     | TOKEN_COMMA
     | TOKEN_COLON
     | TOKEN_SEMICOLON
@@ -87,7 +93,25 @@ type nonTerminalId =
     | NONTERM_stmt
     | NONTERM_stmts
     | NONTERM_exps
+    | NONTERM_dec
+    | NONTERM_tydec
+    | NONTERM_tydecs
+    | NONTERM_tyid
+    | NONTERM_ty
+    | NONTERM_tyfield
+    | NONTERM_tyfields_
+    | NONTERM_tyfields
+    | NONTERM_vardec
+    | NONTERM_fundec
+    | NONTERM_fundecs
+    | NONTERM_lvalue
+    | NONTERM_lvalue_postfix
     | NONTERM_exp
+    | NONTERM_parameters_
+    | NONTERM_parameters
+    | NONTERM_record_field
+    | NONTERM_record_fields_
+    | NONTERM_record_fields
 /// This function maps tokens to integer indexes
 val tagOfToken: token -> int
 
