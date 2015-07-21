@@ -90,9 +90,9 @@ type nonTerminalId =
     | NONTERM__startstart
     | NONTERM_start
     | NONTERM_prog
-    | NONTERM_stmt
-    | NONTERM_stmts
     | NONTERM_exps
+    | NONTERM_exps_
+    | NONTERM_exps_item
     | NONTERM_dec
     | NONTERM_tydec
     | NONTERM_tydecs
@@ -105,7 +105,7 @@ type nonTerminalId =
     | NONTERM_fundec
     | NONTERM_fundecs
     | NONTERM_lvalue
-    | NONTERM_lvalue_postfix
+    | NONTERM_lvalue_tail
     | NONTERM_exp
     | NONTERM_parameters_
     | NONTERM_parameters

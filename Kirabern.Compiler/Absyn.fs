@@ -40,6 +40,7 @@ and Exp =
     | BreakExp of Pos
     | ArrayExp of InitArrayInfo
     | DecExp of Dec
+    | ErrExp
 
 and VarDecInfo = {name: Symbol; escape: bool ref; typ: (TyId * Pos) option; init: Exp; pos: Pos}
 and TypeDecInfo = {name: Symbol; ty: Ty; pos: Pos}

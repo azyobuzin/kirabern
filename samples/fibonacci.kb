@@ -7,11 +7,11 @@ fn fibonacci(n: int) -> int {
             var c = a + b;
             if (count == n) { c }
             else { f(b, c, count + 1) }
-        }
+        };
 
         f(0, 1, 2)
     }
-}
+};
 
 var n = parseInt(readLine());
 var result = fibonacci(n);

@@ -60,7 +60,7 @@
   <ItemGroup>
     <Compile Include="Absyn.fs" />
     <FsYacc Include="Parser.fsy">
-      <OtherFlags>--module Parser</OtherFlags>
+      <OtherFlags>--module Parser -v</OtherFlags>
     </FsYacc>
     <Compile Include="Parser.fs" />
     <FsLex Include="Lexer.fsl">

@@ -1,9 +1,20 @@
 ﻿%{
+open System
 open Microsoft.FSharp.Text.Parsing
 open Absyn
 
+let parse_error_rich = Some (fun (ctx: ParseErrorContext<_>) ->
+    let pos = ctx.ParseState.InputStartPosition 1
+    printfn "Error %d:%d" pos.Line pos.Column
+    printfn "StateStack: %s" (String.Join(" ", ctx.StateStack))
+)
+
 let pos (parseState: IParseState, startIdx, endIdx) =
     (parseState.InputStartPosition startIdx, parseState.InputEndPosition endIdx)
+
+type ExpsItem =
+    | ExpItem of (Exp * Pos)
+    | StmtItem of (Exp * Pos)
 
 type LvaluePostfix =
     | Field of Symbol * Pos
@@ -44,14 +55,39 @@ prog: exps {
     | None -> l
 }
 
+/*
 stmt: exp SEMICOLON { ($1, pos(parseState, 1, 2)) }
+| error SEMICOLON { (ErrExp, pos(parseState, 1, 2)) }
 
 stmts: stmt { [$1] }
 | stmt stmts { $1 :: $2 }
-| { [] }
 
 exps: stmts exp { ($1, Some($2, pos(parseState, 2, 2))) }
 | stmts { ($1, None) }
+| exp { ([], Some($1, pos(parseState, 1, 1))) }
+| { ([], None) }
+*/
+
+exps: { ([], None) }
+| exps_
+    {
+        let _1: ExpsItem list = $1
+        let xs = List.take ($1.Length - 1) $1
+        for x in xs do
+            match x with
+            | ExpItem _ -> failwith "';' が必要です。"
+            | _ -> ()
+        let ys = List.map (fun x -> match x with | ExpItem y | StmtItem y -> y) xs
+        match List.last $1 with
+        | ExpItem x -> (ys, Some(x))
+        | StmtItem x -> (ys @ [x], None)
+    }
+
+exps_: { [] }
+| exps_item exps_ { $1 :: $2 }
+
+exps_item: exp { ExpItem($1, pos(parseState, 1, 1)) }
+| exp SEMICOLON { StmtItem($1, pos(parseState, 1, 1)) }
 
 dec: tydecs { TypeDec $1 }
 | vardec { VarDec $1 }
@@ -60,8 +96,7 @@ dec: tydecs { TypeDec $1 }
 tydec: TYPE ID ASSIGN ty { { name = $2; ty = $4; pos = pos(parseState, 1, 4) } }
 
 tydecs: tydec { [$1] }
-//| tydec tydecs { $1 :: $2 }
-| tydec SEMICOLON tydecs { $1 :: $3 }
+| tydec tydecs { $1 :: $2 }
 
 tyid: ID { SimpleTyId($1, pos(parseState, 1, 1)) }
 | tyid LBRACK RBRACK { ArrayTyId $1 }
@@ -84,10 +119,9 @@ fundec: FN ID LPAREN tyfields RPAREN exp { { name = $2; params' = $4; result = N
 | FN ID LPAREN tyfields RPAREN ARROW tyid exp { { name = $2; params' = $4; result = Some($7, pos(parseState, 7, 7)); body = $8; pos = pos(parseState, 1, 8) } }
 
 fundecs: fundec { [$1] }
-//| fundec fundecs { $1 :: $2 }
-| fundec SEMICOLON fundecs { $1 :: $3 }
+| fundec fundecs { $1 :: $2 }
 
-lvalue: ID lvalue_postfix {
+lvalue: ID lvalue_tail {
     let rec varexp (left, xs) =
         match xs with
         | right :: tail ->
@@ -100,9 +134,9 @@ lvalue: ID lvalue_postfix {
     varexp(SimpleVar($1, pos(parseState, 1, 1)), $2)
 }
 
-lvalue_postfix: { [] }
-| DOT ID lvalue_postfix { Field($2, pos(parseState, 2, 2)) :: $3 }
-| LBRACK exp RBRACK lvalue_postfix { Subscript($2, pos(parseState, 2, 2)) :: $4 }
+lvalue_tail: { [] }
+| DOT ID lvalue_tail { Field($2, pos(parseState, 2, 2)) :: $3 }
+| LBRACK exp RBRACK lvalue_tail { Subscript($2, pos(parseState, 2, 2)) :: $4 }
 
 exp: lvalue { VarExp $1 }
 | NULL { NullExp }
@@ -140,6 +174,8 @@ exp: lvalue { VarExp $1 }
 | BREAK { BreakExp(pos(parseState, 1, 1)) }
 | LPAREN exp RPAREN { $2 }
 | dec { DecExp $1 }
+| LPAREN error RPAREN { ErrExp }
+| LBRACE error RBRACE { ErrExp }
 
 parameters_: exp { [$1] }
 | exp COMMA parameters_ { $1 :: $3 }
