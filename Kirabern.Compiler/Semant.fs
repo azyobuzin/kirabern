@@ -37,17 +37,17 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) =
             | Types.Record(fields, _) as x ->
                 match fields |> List.tryFind (fun (name, _) -> name = field) with
                 | Some(_, ty) -> { exp = (); ty = actualTy ty }
-                | None -> raise (newError(pos, sprintf "'%s' はレコード %s のメンバーではありません。" field (Types.name x)))
-            | x -> raise (newError(varpos, sprintf "型 %s はレコードではありません。" (Types.name x)))
+                | None -> raise (newError(pos, sprintf "'%s' はレコード %O のメンバーではありません。" field x))
+            | x -> raise (newError(varpos, sprintf "型 %O はレコードではありません。" x))
 
         | SubscriptVar((var, varpos), (exp, pos)) ->
             let exp = trexp exp
             match exp.ty with
             | Types.Int -> ()
-            | x -> raise (newError(pos, sprintf "添字は int でなければいけませんが実際には %s です。" (Types.name x)))
+            | x -> raise (newError(pos, sprintf "添字は int でなければいけませんが実際には %O です。" x))
             let var = trvar var
             match var.ty with
             | Types.Array(ty) -> { exp = (); ty = actualTy ty }
-            | x -> raise (newError(varpos, sprintf "型 %s は配列ではありません。" (Types.name x)))
+            | x -> raise (newError(varpos, sprintf "型 %O は配列ではありません。" x))
 
     trexp
