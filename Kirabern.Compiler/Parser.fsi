@@ -92,7 +92,6 @@ type nonTerminalId =
     | NONTERM_prog
     | NONTERM_exps
     | NONTERM_exps_
-    | NONTERM_exps_item
     | NONTERM_dec
     | NONTERM_tydec
     | NONTERM_tydecs

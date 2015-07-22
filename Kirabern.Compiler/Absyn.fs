@@ -21,7 +21,6 @@ and IfInfo = {test: Exp * Pos; then': Exp; else': Exp option; pos: Pos}
 and WhileInfo = {test: Exp; body: Exp; pos: Pos}
 and ForInfo = {var: Symbol; escape: bool ref; lo: Exp; hi: Exp; body: Exp; pos: Pos}
 and InitArrayInfo = {typ: TyId * Pos; size: Exp * Pos; pos: Pos}
-and Exps = (Exp * Pos) list * (Exp * Pos) option
 
 and Exp =
     | VarExp of Var
@@ -32,7 +31,7 @@ and Exp =
     | CallExp of CallInfo
     | OpExp of OpInfo
     | RecordExp of InitRecordInfo
-    | SeqExp of Exps
+    | SeqExp of (Exp * Pos) list
     | AssignExp of AssignInfo
     | IfExp of IfInfo
     | WhileExp of WhileInfo
@@ -41,6 +40,7 @@ and Exp =
     | ArrayExp of InitArrayInfo
     | DecExp of Dec
     | ErrExp
+    | VoidExp
 
 and VarDecInfo = {name: Symbol; escape: bool ref; typ: (TyId * Pos) option; init: Exp; pos: Pos}
 and TypeDecInfo = {name: Symbol; ty: Ty; pos: Pos}
