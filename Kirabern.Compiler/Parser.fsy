@@ -3,11 +3,19 @@ open System
 open Microsoft.FSharp.Text.Parsing
 open Absyn
 
+type ParseError =
+    { position: Position * Position
+      stateStack: int list
+      message: string }
+let errors = new System.Threading.ThreadLocal<_>(fun x -> new System.Collections.Generic.List<ParseError>())
+let clearErrors () = errors.Value.Clear()
+let addError e = errors.Value.Add(e)
+
 let parse_error_rich = Some (fun (ctx: ParseErrorContext<_>) ->
-    let pos = ctx.ParseState.InputStartPosition 1
-    printfn "Error %d:%d" pos.Line pos.Column
-    printfn "StateStack: %s" (String.Join(" ", ctx.StateStack))
-)
+    { position = ctx.ParseState.ResultRange
+      stateStack = ctx.StateStack
+      message = ctx.Message }
+    |> addError)
 
 let pos (parseState: IParseState, startIdx, endIdx) =
     (parseState.InputStartPosition startIdx, parseState.InputEndPosition endIdx)
@@ -17,8 +25,8 @@ type ExpsItem =
     | StmtItem of (Exp * Pos)
 
 type LvalueTail =
-    | Field of Symbol * Pos
-    | Subscript of Exp * Pos
+    | Field of Pos * Symbol * Pos
+    | Subscript of Pos * Exp * Pos
 
 let opexp (left, oper, right, parseState) =
     OpExp { left = left; oper = oper; right = right; pos = pos(parseState, 1, 3) }
@@ -36,7 +44,7 @@ let ifelseexp (test, then', else', pos) =
 %token <string> STRING
 
 %start start
-%type <Program> start
+%type <Absyn.Program> start
 
 %nonassoc ANDALSO ORELSE
 %nonassoc EQ NEQ LT LE GT GE
@@ -49,19 +57,6 @@ let ifelseexp (test, then', else', pos) =
 start: prog EOF { $1 }
 
 prog: exps { $1 }
-
-/*
-stmt: exp SEMICOLON { ($1, pos(parseState, 1, 2)) }
-| error SEMICOLON { (ErrExp, pos(parseState, 1, 2)) }
-
-stmts: stmt { [$1] }
-| stmt stmts { $1 :: $2 }
-
-exps: stmts exp { ($1, Some($2, pos(parseState, 2, 2))) }
-| stmts { ($1, None) }
-| exp { ([], Some($1, pos(parseState, 1, 1))) }
-| { ([], None) }
-*/
 
 exps: { [] }
 | exps_ { $1 }
@@ -107,16 +102,16 @@ lvalue: ID lvalue_tail {
         | right :: tail ->
             let newleft =
                 match right with
-                | Field(symbol, pos) -> FieldVar(left, symbol, pos)
-                | Subscript(exp, pos) -> SubscriptVar(left, exp, pos)
+                | Field(varpos, symbol, pos) -> FieldVar((left, varpos), (symbol, pos))
+                | Subscript(varpos, exp, pos) -> SubscriptVar((left, varpos), (exp, pos))
             varexp(newleft, tail)
         | [] -> left
     varexp(SimpleVar($1, pos(parseState, 1, 1)), $2)
 }
 
 lvalue_tail: { [] }
-| DOT ID lvalue_tail { Field($2, pos(parseState, 2, 2)) :: $3 }
-| LBRACK exp RBRACK lvalue_tail { Subscript($2, pos(parseState, 2, 2)) :: $4 }
+| DOT ID lvalue_tail { Field(pos(parseState, 1, 1), $2, pos(parseState, 2, 2)) :: $3 }
+| LBRACK exp RBRACK lvalue_tail { Subscript(pos(parseState, 1, 1), $2, pos(parseState, 2, 2)) :: $4 }
 
 exp: lvalue { VarExp $1 }
 | NULL { NullExp }
@@ -145,7 +140,7 @@ exp: lvalue { VarExp $1 }
 | exp ANDALSO exp { ifelseexp(($1, pos(parseState, 1, 1)), $3, IntExp 0, pos(parseState, 1, 3)) }
 | exp ORELSE exp { ifelseexp(($1, pos(parseState, 1, 1)), IntExp 1, $3, pos(parseState, 1, 3)) }
 | NEW ID LBRACE record_fields RBRACE { RecordExp { fields = $4; typ = $2; pos = pos(parseState, 1, 5) } }
-| NEW tyid LBRACK exp RBRACK { ArrayExp { typ = ($2, pos(parseState, 2, 2)); size = ($4, pos(parseState, 4, 4)); pos = pos(parseState, 1, 5) } }
+| NEW tyid LBRACK exp RBRACK { ArrayExp { typ = (ArrayTyId $2, pos(parseState, 2, 2)); size = ($4, pos(parseState, 4, 4)); pos = pos(parseState, 1, 5) } }
 | lvalue ASSIGN exp { AssignExp { var = $1; exp = $3; pos = pos(parseState, 1, 3) } }
 | IF LPAREN exp RPAREN exp ELSE exp { ifelseexp(($3, pos(parseState, 3, 3)), $5, $7, pos(parseState, 1, 7)) }
 | IF LPAREN exp RPAREN exp { IfExp { test = ($3, pos(parseState, 3, 3)); then' = $5; else' = None; pos = pos(parseState, 1, 5) } }

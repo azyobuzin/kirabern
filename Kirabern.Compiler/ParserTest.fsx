@@ -14,17 +14,16 @@ lexbuf.EndPos <- { pos_bol = 0
                    pos_fname = file
                    pos_cnum = 0
                    pos_lnum = 1 }
-try 
-    let lexer lexbuf = 
-        let token = Lexer.token lexbuf
-        let startPos = lexbuf.StartPos
-        printfn "%s\t%d:%d" (Parser.token_to_string token) startPos.Line startPos.Column
-        token
-    
-    let program = Parser.start lexer lexbuf
+try     
+    let program = Parser.start Lexer.token lexbuf
     printfn "%+A" program
-with ex -> 
-    let startPos = lexbuf.StartPos
-    let endPos = lexbuf.EndPos
-    printfn "%d:%d, %d:%d" startPos.Line startPos.Column endPos.Line endPos.Column
+    printfn ""
+with ex ->
+    printfn "Exception"
     printfn "%O" ex
+    printfn ""
+
+for x in Parser.errors.Value do
+    printfn "Error"
+    printfn "%+A" x
+    printfn ""

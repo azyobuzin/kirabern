@@ -6,8 +6,8 @@ type Symbol = string
 
 type Var =
     | SimpleVar of Symbol * Pos
-    | FieldVar of Var * Symbol * Pos
-    | SubscriptVar of Var * Exp * Pos
+    | FieldVar of (Var * Pos) * (Symbol * Pos)
+    | SubscriptVar of (Var * Pos) * (Exp * Pos)
 
 and TyId =
     | SimpleTyId of Symbol * Pos
