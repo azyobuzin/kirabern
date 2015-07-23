@@ -9,22 +9,22 @@ type TEnv = Map<string, Types.Ty>
 type ExpTy = { exp: Translate.Exp; ty: Types.Ty }
 
 type ErrorInfo = { position: Position * Position; message: string }
-exception SemanticError of ErrorInfo
-exception SemanticErrors of System.Collections.Generic.IReadOnlyList<ErrorInfo>
+exception SemanticError of ErrorInfo //TODO: こっちいらなくね？
+exception SemanticErrors of ErrorInfo list
 
 let private newError (pos, msg) = SemanticError { position = pos; message = msg }
 let private symbolNotExists (pos, name) = newError(pos, sprintf "シンボル '%s' が存在しません" name)
 let private loopToCheck<'a> (f: 'a -> unit) (xs: 'a seq) =
-    let errors = new System.Collections.Generic.List<_>()
+    let mutable errors = []
     for x in xs do
         try
             f x
         with
-        | SemanticError(e) -> errors.Add(e)
-        | SemanticErrors(es) -> errors.AddRange(es)
-    if errors.Count = 1 then
-        raise (SemanticError errors.[0])
-    if errors.Count > 1 then
+        | SemanticError(e) -> errors <- errors @ [e]
+        | SemanticErrors(es) -> errors <- errors @ es
+    if errors.Length = 1 then
+        raise (SemanticError errors.Head)
+    if errors.Length > 1 then
         raise (SemanticErrors errors)
 
 let rec actualTy ty =
@@ -114,6 +114,8 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) =
                     { exp = (); ty = ty }
                 | _ -> raise (newError(typpos, sprintf "型 %s はレコードではありません。" typ))
             | None -> raise (symbolNotExists(typpos, typ))
+        | SeqExp([]) -> { exp = (); ty = Types.Void }
+        | SeqExp(xs) -> transSeqExp env xs            
         | _ -> raise (NotImplementedException())
 
     and trvar var =
@@ -143,3 +145,15 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) =
             | x -> raise (newError(varpos, sprintf "型 %O は配列ではありません。" x))
 
     trexp
+
+and transSeqExp env =
+    let rec trseqexp xs =
+        match xs with
+        | [] -> { exp = (); ty = Types.Void }
+        | [exp, pos] -> { exp = (); ty = (transExp env exp).ty }
+        | (exp, pos) :: ys ->
+            transExp env exp |> ignore
+            trseqexp ys
+    //TODO: エラー収集
+    //TODO: DecExp による env 書き換え
+    trseqexp
