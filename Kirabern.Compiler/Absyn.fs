@@ -44,9 +44,9 @@ and Exp =
     | VoidExp
     | ErrExp
 
-and VarDecInfo = {name: string; escape: bool ref; typ: (TyPos) option; init: Exp; pos: Pos}
+and VarDecInfo = {name: string; escape: bool ref; typ: TyPos option; init: Exp; pos: Pos}
 and TypeDecInfo = {name: string; ty: Ty; pos: Pos}
-and FunDecInfo = {name: string; params': Field list; result: (TyPos) option; body: Exp; pos: Pos}
+and FunDecInfo = {name: string; params': Field list; result: TyPos option; body: Exp; pos: Pos}
 
 and Dec =
     | FunDec of FunDecInfo list
