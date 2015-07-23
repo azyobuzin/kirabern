@@ -23,4 +23,3 @@ type Ty =
         | Array(ty) -> sprintf "%O[]" ty
         | Alias(n, _) -> n
         | Void -> "void"
-

@@ -13,9 +13,9 @@ and TyId =
     | SimpleTyId of Symbol * Pos
     | ArrayTyId of TyId
 
-and CallInfo = {func: Symbol; args: Exp list; pos: Pos}
-and OpInfo = {left: Exp; oper: Operator; right: Exp; pos: Pos}
-and InitRecordInfo = {fields: (Symbol * Exp * Pos) list; typ: Symbol; pos: Pos}
+and CallInfo = {func: (Symbol * Pos); args: (Exp * Pos) list; pos: Pos}
+and OpInfo = {left: (Exp * Pos); oper: Operator; right: (Exp * Pos); pos: Pos}
+and InitRecordInfo = {fields: ((Symbol * Pos) * (Exp * Pos)) list; typ: (Symbol * Pos); pos: Pos}
 and AssignInfo = {var: Var; exp: Exp; pos: Pos}
 and IfInfo = {test: Exp * Pos; then': Exp; else': Exp option; pos: Pos}
 and WhileInfo = {test: Exp; body: Exp; pos: Pos}
@@ -39,8 +39,8 @@ and Exp =
     | BreakExp of Pos
     | ArrayExp of InitArrayInfo
     | DecExp of Dec
-    | ErrExp
     | VoidExp
+    | ErrExp
 
 and VarDecInfo = {name: Symbol; escape: bool ref; typ: (TyId * Pos) option; init: Exp; pos: Pos}
 and TypeDecInfo = {name: Symbol; ty: Ty; pos: Pos}
@@ -60,5 +60,17 @@ and Ty =
 and Operator =
     | PlusOp | MinusOp | TimesOp | DivideOp
     | EqOp | NeqOp | LtOp | LeOp | GtOp | GeOp
+    override x.ToString() =
+        match x with
+        | PlusOp -> "+"
+        | MinusOp -> "-"
+        | TimesOp -> "*"
+        | DivideOp -> "/"
+        | EqOp -> "=="
+        | NeqOp -> "!="
+        | LtOp -> "<"
+        | LeOp -> "<="
+        | GtOp -> ">"
+        | GeOp -> ">="
 
 and Program = (Exp * Pos) list
