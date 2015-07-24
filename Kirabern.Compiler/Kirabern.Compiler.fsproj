@@ -77,6 +77,7 @@
     <Content Include="packages.config" />
     <None Include="LexerTest.fsx" />
     <None Include="ParserTest.fsx" />
+    <None Include="SemantTest.fsx" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FsLexYacc.Runtime">

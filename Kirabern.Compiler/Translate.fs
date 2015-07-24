@@ -1,5 +1,5 @@
 ﻿module Translate
 
-type Level = { parent: Level }
+type Level = unit
 type Access = unit
 type Exp = unit
