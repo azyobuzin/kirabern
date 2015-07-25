@@ -40,6 +40,7 @@ let private checkedMap<'a, 'b> (f: 'a -> 'b) (xs: 'a list) =
 let rec actualTy ty =
     match ty with
     | Types.Alias(_, x) -> actualTy (!x).Value
+    | Types.Array(x) -> Types.Array(actualTy x)
     | x -> x
 
 let cmpTy x y =
@@ -246,20 +247,19 @@ and transDec ((venv, tenv) as env) dec =
             if not(funcNames.Add(name)) then
                 raise (newError(namepos, sprintf "同名の関数 '%s' を同時に宣言することはできません。" name))
         )
-        let f =
-            venv |> List.fold (fun tbl dec ->
-                let formals =
-                    dec.params'
-                    |> List.map (fun x ->
-                        let name, _ = x.name
-                        name, getty x.typ)
-                let result =
-                    match dec.result with
-                    | Some(x) -> getty x
-                    | None -> Types.Void
-                let name, _ = dec.name
-                tbl.Add(name, FunEntry { level = (); label = (); formals = formals; result = result }))
-        let venv' = f decs
+        let f (tbl: VEnv) dec =
+            let formals =
+                dec.params'
+                |> List.map (fun x ->
+                    let name, _ = x.name
+                    name, getty x.typ)
+            let result =
+                match dec.result with
+                | Some(x) -> getty x
+                | None -> Types.Void
+            let name, _ = dec.name
+            tbl.Add(name, FunEntry { level = (); label = (); formals = formals; result = result })
+        let venv' = List.fold f venv decs
         decs |> loopToCheck (fun x ->
             let prmNames = HashSet()
             x.params' |> loopToCheck (fun x ->
@@ -267,11 +267,10 @@ and transDec ((venv, tenv) as env) dec =
                 if not(prmNames.Add(name)) then
                     raise (newError(namepos, sprintf "引数 '%s' はすでに宣言されています。" name))
             )
-            let f =
-                venv' |> List.fold (fun tbl prm ->
-                    let name, _ = prm.name
-                    tbl.Add(name, VarEntry { access = (); ty = getty prm.typ }))
-            let venv'' = f x.params'
+            let f (tbl: VEnv) prm =
+                let name, _ = prm.name
+                tbl.Add(name, VarEntry { access = (); ty = getty prm.typ })
+            let venv'' = List.fold f venv' x.params'
             let body, bodypos = x.body
             let body = transExp (venv'', tenv) body
             match x.result with
@@ -308,10 +307,8 @@ and transDec ((venv, tenv) as env) dec =
             let name, _ = x.name
             let tyref = ref None
             name, tyref, x.ty)
-        let f =
-            tenv |> List.fold (fun tbl (name, tyref, _) ->
-                tbl.Add(name, Types.Alias(name, tyref)))
-        let tenv' = f tys
+        let f (tbl: TEnv) (name, tyref, _) = tbl.Add(name, Types.Alias(name, tyref))
+        let tenv' = List.fold f tenv tys
         let trty = transTy tenv'
         for (_, tyref, dec) in tys do
             tyref := Some(trty dec)

@@ -67,6 +67,7 @@
       <OtherFlags>--unicode</OtherFlags>
     </FsLex>
     <Compile Include="Lexer.fs" />
+    <Compile Include="FindEscape.fs" />
     <Compile Include="Types.fs" />
     <Compile Include="Translate.fs" />
     <Compile Include="Temp.fs" />
