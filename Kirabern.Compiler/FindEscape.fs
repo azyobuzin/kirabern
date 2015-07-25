@@ -1,4 +1,4 @@
-﻿module FindEscape
+﻿module Kirabern.Compiler.FindEscape
 open Absyn
 
 type Depth = int

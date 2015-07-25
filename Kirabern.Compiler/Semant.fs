@@ -1,4 +1,4 @@
-﻿module Semant
+﻿module Kirabern.Compiler.Semant
 open System.Collections.Generic
 open System.Diagnostics
 open Microsoft.FSharp.Text.Lexing

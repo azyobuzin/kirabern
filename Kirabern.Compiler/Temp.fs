@@ -1,4 +1,4 @@
-﻿module Temp
+﻿module Kirabern.Compiler.Temp
 
 type Variable =
     | NamedVariable of string

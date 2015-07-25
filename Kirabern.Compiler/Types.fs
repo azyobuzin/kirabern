@@ -1,4 +1,4 @@
-﻿module Types
+﻿module Kirabern.Compiler.Types
 open System
 
 type unique = unit ref

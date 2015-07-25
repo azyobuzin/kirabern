@@ -60,7 +60,7 @@
   <ItemGroup>
     <Compile Include="Absyn.fs" />
     <FsYacc Include="Parser.fsy">
-      <OtherFlags>--module Parser -v</OtherFlags>
+      <OtherFlags>--module Kirabern.Compiler.Parser -v</OtherFlags>
     </FsYacc>
     <Compile Include="Parser.fs" />
     <FsLex Include="Lexer.fsl">
@@ -73,9 +73,9 @@
     <Compile Include="Temp.fs" />
     <Compile Include="Env.fs" />
     <Compile Include="Semant.fs" />
-    <Compile Include="Library1.fs" />
     <Content Include="app.config" />
     <Content Include="packages.config" />
+    <None Include="TestUtils.fsx" />
     <None Include="LexerTest.fsx" />
     <None Include="ParserTest.fsx" />
     <None Include="SemantTest.fsx" />

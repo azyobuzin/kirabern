@@ -1,4 +1,4 @@
-﻿module Absyn
+﻿module Kirabern.Compiler.Absyn
 open Microsoft.FSharp.Text.Lexing
 
 type Pos = Position * Position

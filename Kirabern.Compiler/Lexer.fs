@@ -1,6 +1,6 @@
 # 1 "Lexer.fsl"
  
-module Lexer
+module Kirabern.Compiler.Lexer
 open System
 open Microsoft.FSharp.Text.Lexing
 open Parser

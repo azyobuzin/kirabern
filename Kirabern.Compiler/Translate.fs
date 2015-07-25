@@ -1,4 +1,4 @@
-﻿module Translate
+﻿module Kirabern.Compiler.Translate
 
 type Level = unit
 type Access = unit
