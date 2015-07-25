@@ -88,7 +88,7 @@ and traverseSeqExp env d xs =
             | _ ->
                 traverseExp env d exp
                 env
-        traverseSeqExp env' d xs
+        traverseSeqExp env' d ys
 
 let findEscape (prog: Program) =
     traverseExp Map.empty 0 (SeqExp prog)

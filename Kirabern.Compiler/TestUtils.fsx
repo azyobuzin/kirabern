@@ -19,4 +19,5 @@ let initLexBuf() =
 
 let parseProgram () = 
     let prog = Parser.start Lexer.token (initLexBuf())
+    FindEscape.findEscape prog
     prog
