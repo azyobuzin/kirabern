@@ -12,37 +12,37 @@ let baseTEnv =
                    "string", Types.String |]
 let baseVEnv = 
     Map.ofArray [| "print", 
-                   FunEntry { level = ()
+                   FunEntry { level = Translate.topLevel
                               label = ()
                               formals = [ "value", Types.String ]
                               result = Types.Void }
                    "println", 
-                   FunEntry { level = ()
+                   FunEntry { level = Translate.topLevel
                               label = ()
                               formals = [ "value", Types.String ]
                               result = Types.Void }
                    "readLine", 
-                   FunEntry { level = ()
+                   FunEntry { level = Translate.topLevel
                               label = ()
                               formals = []
                               result = Types.String }
                    "parseInt", 
-                   FunEntry { level = ()
+                   FunEntry { level = Translate.topLevel
                               label = ()
                               formals = [ "s", Types.String ]
                               result = Types.Int }
                    "intToString", 
-                   FunEntry { level = ()
+                   FunEntry { level = Translate.topLevel
                               label = ()
                               formals = [ "i", Types.Int ]
                               result = Types.String }
                    "not", 
-                   FunEntry { level = ()
+                   FunEntry { level = Translate.topLevel
                               label = ()
                               formals = [ "value", Types.Int ]
                               result = Types.Int }
                    "exit", 
-                   FunEntry { level = ()
+                   FunEntry { level = Translate.topLevel
                               label = ()
                               formals = [ "exitCode", Types.Int ]
                               result = Types.Void } |]

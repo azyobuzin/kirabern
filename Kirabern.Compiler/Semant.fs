@@ -65,7 +65,7 @@ let rec getty (tenv: TEnv) tyid =
         | None -> raise (symbolNotExists(name, pos))
     | ArrayTyId(x) -> Types.Array(getty tenv x)
 
-let rec transExp ((venv: VEnv, tenv: TEnv) as env) =
+let rec transExp ((venv: VEnv, tenv: TEnv) as env) level =
     let rec trexp exp =
         match exp with
         | VarExp(var) -> trvar var
@@ -144,7 +144,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) =
                 | _ -> raise (newError(typpos, sprintf "型 %s はレコードではありません。" typ))
             | None -> raise (symbolNotExists(typ, typpos))
 
-        | SeqExp(xs) -> transSeqExp env xs
+        | SeqExp(xs) -> transSeqExp env level xs
 
         | AssignExp(x) ->
             let left = trvar x.var
@@ -185,7 +185,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) =
             if not(isInt hi.ty) then
                 raise (newError(hipos, sprintf "for の最大値は int でなければいけませんが、実際には %O が指定されています。" hi.ty))
             let venv' = venv.Add(x.var, VarEntry { access = (); ty = Types.Int })
-            transExp (venv', tenv) x.body |> ignore
+            transExp (venv', tenv) level x.body |> ignore
             { exp = (); ty = Types.Void }
 
         | BreakExp(pos) -> { exp = (); ty = Types.Void }
@@ -203,7 +203,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) =
             { exp = (); ty = actualTy ty }
 
         | DecExp(x) ->
-            transDec env x |> ignore
+            transDec env level x |> ignore
             { exp = (); ty = Types.Void }
 
         | VoidExp | ErrExp -> { exp = (); ty = Types.Void }
@@ -236,7 +236,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) =
 
     trexp
 
-and transDec ((venv, tenv) as env) dec =
+and transDec ((venv, tenv) as env) level dec =
     let getty = getty tenv
 
     match dec with
@@ -258,7 +258,9 @@ and transDec ((venv, tenv) as env) dec =
                 | Some(x) -> getty x
                 | None -> Types.Void
             let name, _ = dec.name
-            tbl.Add(name, FunEntry { level = (); label = (); formals = formals; result = result })
+            let startPos, _ = dec.pos
+            let newLevel = Translate.Level(sprintf "%s@%d" name startPos.AbsoluteOffset, Some(level))
+            tbl.Add(name, FunEntry { level = newLevel; label = (); formals = formals; result = result })
         let venv' = List.fold f venv decs
         decs |> loopToCheck (fun x ->
             let prmNames = HashSet()
@@ -272,7 +274,7 @@ and transDec ((venv, tenv) as env) dec =
                 tbl.Add(name, VarEntry { access = (); ty = getty prm.typ })
             let venv'' = List.fold f venv' x.params'
             let body, bodypos = x.body
-            let body = transExp (venv'', tenv) body
+            let body = transExp (venv'', tenv) level body
             match x.result with
             | Some(y) ->
                 let result = getty y
@@ -284,7 +286,7 @@ and transDec ((venv, tenv) as env) dec =
 
     | VarDec(x) ->
         let init, initpos = x.init
-        let init = transExp env init
+        let init = transExp env level init
         let ty =
             match x.typ with
             | Some(y) ->
@@ -327,29 +329,29 @@ and transTy tenv dec =
                 name, getty tenv x.typ)
         Types.Record(fields, Types.newUnique())
 
-and transSeqExp env xs =
+and transSeqExp env level xs =
     match xs with
     | [] -> { exp = (); ty = Types.Void }
-    | [exp, pos] -> { exp = (); ty = (transExp env exp).ty }
+    | [exp, pos] -> { exp = (); ty = (transExp env level exp).ty }
     | (exp, pos) :: ys ->
         let mutable errors = []
         let env' =
             try
                 match exp with
-                | DecExp(x) -> transDec env x
+                | DecExp(x) -> transDec env level x
                 | _ ->
-                    transExp env exp |> ignore
+                    transExp env level exp |> ignore
                     env
             with SemanticError(es) ->
                 errors <- es
                 env
         let mutable result = Unchecked.defaultof<ExpTy>
         try
-            result <- transSeqExp env' ys
+            result <- transSeqExp env' level ys
         with SemanticError(es) -> errors <- errors @ es
         if errors.Length > 0 then
             raise (SemanticError errors)
         result
 
 and transProg (prog: Program) =
-    transExp (baseVEnv, baseTEnv) (SeqExp prog)
+    transExp (baseVEnv, baseTEnv) Translate.topLevel (SeqExp prog)

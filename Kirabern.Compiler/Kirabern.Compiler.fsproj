@@ -69,8 +69,8 @@
     <Compile Include="Lexer.fs" />
     <Compile Include="FindEscape.fs" />
     <Compile Include="Types.fs" />
-    <Compile Include="Translate.fs" />
     <Compile Include="Temp.fs" />
+    <Compile Include="Translate.fs" />
     <Compile Include="Env.fs" />
     <Compile Include="Semant.fs" />
     <Content Include="app.config" />
