@@ -1,7 +1,7 @@
 ﻿module Kirabern.Compiler.Env
 
-type VarEntryInfo = { access: Translate.Access; ty: Types.Ty }
-type FunEntryInfo = { level: Translate.Level; label: Temp.Label; formals: (string * Types.Ty) list; result: Types.Ty }
+type VarEntryInfo = { access: Level.VarInLevel; ty: Types.Ty }
+type FunEntryInfo = { level: Level.Level; formals: (string * Types.Ty) list; result: Types.Ty }
 
 type Entry =
     | VarEntry of VarEntryInfo
@@ -12,37 +12,30 @@ let baseTEnv =
                    "string", Types.String |]
 let baseVEnv = 
     Map.ofArray [| "print", 
-                   FunEntry { level = Translate.topLevel
-                              label = ()
+                   FunEntry { level = Level.dummyLevel
                               formals = [ "value", Types.String ]
                               result = Types.Void }
                    "println", 
-                   FunEntry { level = Translate.topLevel
-                              label = ()
+                   FunEntry { level = Level.dummyLevel
                               formals = [ "value", Types.String ]
                               result = Types.Void }
                    "readLine", 
-                   FunEntry { level = Translate.topLevel
-                              label = ()
+                   FunEntry { level = Level.dummyLevel
                               formals = []
                               result = Types.String }
                    "parseInt", 
-                   FunEntry { level = Translate.topLevel
-                              label = ()
+                   FunEntry { level = Level.dummyLevel
                               formals = [ "s", Types.String ]
                               result = Types.Int }
                    "intToString", 
-                   FunEntry { level = Translate.topLevel
-                              label = ()
+                   FunEntry { level = Level.dummyLevel
                               formals = [ "i", Types.Int ]
                               result = Types.String }
                    "not", 
-                   FunEntry { level = Translate.topLevel
-                              label = ()
+                   FunEntry { level = Level.dummyLevel
                               formals = [ "value", Types.Int ]
                               result = Types.Int }
                    "exit", 
-                   FunEntry { level = Translate.topLevel
-                              label = ()
+                   FunEntry { level = Level.dummyLevel
                               formals = [ "exitCode", Types.Int ]
                               result = Types.Void } |]

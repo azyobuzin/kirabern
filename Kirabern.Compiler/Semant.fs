@@ -4,6 +4,7 @@ open System.Diagnostics
 open Microsoft.FSharp.Text.Lexing
 open Absyn
 open Env
+open Level
 
 type VEnv = Map<string, Env.Entry>
 type TEnv = Map<string, Types.Ty>
@@ -65,7 +66,7 @@ let rec getty (tenv: TEnv) tyid =
         | None -> raise (symbolNotExists(name, pos))
     | ArrayTyId(x) -> Types.Array(getty tenv x)
 
-let rec transExp ((venv: VEnv, tenv: TEnv) as env) level =
+let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) =
     let rec trexp exp =
         match exp with
         | VarExp(var) -> trvar var
@@ -184,7 +185,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) level =
             let hi = trexp hi
             if not(isInt hi.ty) then
                 raise (newError(hipos, sprintf "for の最大値は int でなければいけませんが、実際には %O が指定されています。" hi.ty))
-            let venv' = venv.Add(x.var, VarEntry { access = (); ty = Types.Int })
+            let venv' = venv.Add(x.var, VarEntry { access = level.CreateVar x.var Types.Int !x.escape; ty = Types.Int })
             transExp (venv', tenv) level x.body |> ignore
             { exp = (); ty = Types.Void }
 
@@ -242,12 +243,16 @@ and transDec ((venv, tenv) as env) level dec =
     match dec with
     | FunDec(decs) ->
         let funcNames = HashSet()
-        decs |> loopToCheck (fun x ->
+        let decs = decs |> checkedMap (fun x ->
             let name, namepos = x.name
             if not(funcNames.Add(name)) then
                 raise (newError(namepos, sprintf "同名の関数 '%s' を同時に宣言することはできません。" name))
+            let startPos, _ = x.pos
+            let newLevel = Level(sprintf "%s@%d" name startPos.AbsoluteOffset, Some(level))
+            level.AddChild(newLevel)
+            x, newLevel
         )
-        let f (tbl: VEnv) dec =
+        let f (tbl: VEnv) (dec, newLevel) =
             let formals =
                 dec.params'
                 |> List.map (fun x ->
@@ -258,11 +263,9 @@ and transDec ((venv, tenv) as env) level dec =
                 | Some(x) -> getty x
                 | None -> Types.Void
             let name, _ = dec.name
-            let startPos, _ = dec.pos
-            let newLevel = Translate.Level(sprintf "%s@%d" name startPos.AbsoluteOffset, Some(level))
-            tbl.Add(name, FunEntry { level = newLevel; label = (); formals = formals; result = result })
+            tbl.Add(name, FunEntry { level = newLevel; formals = formals; result = result })
         let venv' = List.fold f venv decs
-        decs |> loopToCheck (fun x ->
+        decs |> loopToCheck (fun (x, newLevel) ->
             let prmNames = HashSet()
             x.params' |> loopToCheck (fun x ->
                 let name, namepos = x.name
@@ -271,10 +274,11 @@ and transDec ((venv, tenv) as env) level dec =
             )
             let f (tbl: VEnv) prm =
                 let name, _ = prm.name
-                tbl.Add(name, VarEntry { access = (); ty = getty prm.typ })
+                let ty = getty prm.typ
+                tbl.Add(name, VarEntry { access = newLevel.AddArgument name ty !prm.escape; ty = ty })
             let venv'' = List.fold f venv' x.params'
             let body, bodypos = x.body
-            let body = transExp (venv'', tenv) level body
+            let body = transExp (venv'', tenv) newLevel body
             match x.result with
             | Some(y) ->
                 let result = getty y
@@ -295,7 +299,7 @@ and transDec ((venv, tenv) as env) level dec =
                     raise (newError(initpos, sprintf "この変数の型は %O と宣言されていますが、右辺は %O です。" ty init.ty))
                 ty
             | None -> init.ty
-        let venv' = venv.Add(x.name, VarEntry { access = (); ty = ty })
+        let venv' = venv.Add(x.name, VarEntry { access = level.CreateVar x.name ty !x.escape; ty = ty })
         (venv', tenv)
 
     | TypeDec(decs) ->
@@ -353,5 +357,5 @@ and transSeqExp env level xs =
             raise (SemanticError errors)
         result
 
-and transProg (prog: Program) =
-    transExp (baseVEnv, baseTEnv) Translate.topLevel (SeqExp prog)
+and transProg env topLevel (prog: Program) =
+    transExp env topLevel (SeqExp prog)
