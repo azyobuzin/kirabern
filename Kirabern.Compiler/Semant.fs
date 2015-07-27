@@ -10,6 +10,8 @@ type VEnv = Map<string, Env.Entry>
 type TEnv = Map<string, Types.Ty>
 type ExpTy = { exp: Translate.Exp; ty: Types.Ty }
 
+let voidExpTy = { exp = Translate.voidExp; ty = Types.Void }
+
 type ErrorInfo = { position: Position * Position; message: string }
 exception SemanticError of ErrorInfo list
 
@@ -26,7 +28,7 @@ let private loopToCheck<'a> (f: 'a -> unit) (xs: 'a seq) =
     if errors.Length > 0 then
         raise (SemanticError errors)
 
-let private checkedMap<'a, 'b> (f: 'a -> 'b) (xs: 'a list) =
+let private checkedMap<'a, 'b> (f: 'a -> 'b) (xs: 'a seq) =
     let mutable result = []
     let mutable errors = []
     for x in xs do
@@ -38,11 +40,7 @@ let private checkedMap<'a, 'b> (f: 'a -> 'b) (xs: 'a list) =
         raise (SemanticError errors)
     result
 
-let rec actualTy ty =
-    match ty with
-    | Types.Alias(_, x) -> actualTy (!x).Value
-    | Types.Array(x) -> Types.Array(actualTy x)
-    | x -> x
+let actualTy = Types.actualTy
 
 let cmpTy x y =
     let x, y = (actualTy x), (actualTy y)
@@ -66,22 +64,22 @@ let rec getty (tenv: TEnv) tyid =
         | None -> raise (symbolNotExists(name, pos))
     | ArrayTyId(x) -> Types.Array(getty tenv x)
 
-let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) =
+let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) breakLabel =
     let rec trexp exp =
         match exp with
         | VarExp(var) -> trvar var
 
-        | NullExp -> { exp = (); ty = Types.Null }
+        | NullExp -> { exp = Translate.nullExp; ty = Types.Null }
 
-        | IntExp(i) -> { exp = (); ty = Types.Int }
+        | IntExp(i) -> { exp = Translate.intExp i; ty = Types.Int }
 
         | NegateExp(exp, pos) ->
             let exp = trexp exp
             match exp.ty with
-            | Types.Int -> { exp = (); ty = Types.Int }
+            | Types.Int -> { exp = Translate.negateExp exp.exp; ty = Types.Int }
             | x -> raise (newError(pos, sprintf "ネゲートは int に対してのみ適用できますが、指定された型は %O です。" x))
 
-        | StringExp(s) -> { exp = (); ty = Types.String }
+        | StringExp(s) -> { exp = Translate.stringExp s; ty = Types.String }
 
         | CallExp(x) ->
             let func, funcpos = x.func
@@ -90,14 +88,15 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) =
                 if x.args.Length <> f.formals.Length then
                     raise (newError(x.pos, sprintf "関数 '%s' には %d 個の引数が必要ですが、実際には %d 個指定されています。" func f.formals.Length x.args.Length))
 
-                Seq.zip x.args f.formals
-                |> loopToCheck (fun ((arg, argpos), (prmname, formal)) ->
-                    let arg = trexp arg
-                    if not(cmpTy arg.ty formal) then
-                        raise (newError(argpos, sprintf "パラメータ '%s' は型 %O ですが、実際には %O が指定されています。" prmname formal arg.ty))
-                )
+                let args =
+                    Seq.zip x.args f.formals
+                    |> checkedMap (fun ((arg, argpos), (prmname, formal)) ->
+                        let arg = trexp arg
+                        if not(cmpTy arg.ty formal) then
+                            raise (newError(argpos, sprintf "パラメータ '%s' は型 %O ですが、実際には %O が指定されています。" prmname formal arg.ty))
+                        arg.exp)
 
-                { exp = (); ty = actualTy f.result }
+                { exp = Translate.callExp f.level args; ty = actualTy f.result }
             | Some(_) -> raise (newError(funcpos, sprintf "'%s' は関数ではないシンボルです。" func))
             | None -> raise (symbolNotExists(func, funcpos))
 
@@ -113,46 +112,46 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) =
                     raise (newError(leftpos, sprintf "演算子 %O の左辺は int でなければいけませんが、実際には %O です。" x.oper left.ty))
                 if notInt right.ty then
                     raise (newError(rightpos, sprintf "演算子 %O の右辺は int でなければいけませんが、実際には %O です。" x.oper right.ty))
-                { exp = (); ty = Types.Int }
             | EqOp | NeqOp | LtOp | LeOp | GeOp | GtOp | GeOp ->
                 if not(cmpTy left.ty right.ty) then
                     raise (newError(x.pos, sprintf "演算子 %O の両辺は同じ型でなければいけません。 左辺: %O, 右辺: %O" x.oper left.ty right.ty))
-                { exp = (); ty = Types.Int }
+            { exp = Translate.opExp x.oper left.exp right.exp; ty = Types.Int }
 
         | RecordExp(x) ->
             let typ, typpos = x.typ
             match tenv.TryFind(typ) with
             | Some(y) ->
                 match actualTy y with
-                | Types.Record(formals, _) as ty ->
-                    if x.fields.Length <> formals.Length then
-                        raise (newError(x.pos, sprintf "レコード %s のフィールドは %d 個ですが、実際には %d 個指定されています。" typ formals.Length x.fields.Length))
+                | Types.Record(info) as ty ->
+                    if x.fields.Length <> info.Fields.Length then
+                        raise (newError(x.pos, sprintf "レコード %s のフィールドは %d 個ですが、実際には %d 個指定されています。" typ info.Fields.Length x.fields.Length))
 
                     let assignedFields = HashSet()
-                    x.fields |> loopToCheck (fun ((name, namepos), (exp, exppos)) ->
-                        if assignedFields.Contains(name) then
-                            raise (newError(namepos, sprintf "フィールド '%s' はすでに代入されています。" name))
-                        match formals |> List.tryFind (fun (s, _) -> name = s) with
-                        | Some(_, formal) ->
-                            assignedFields.Add(name) |> Debug.Assert
-                            let exp = trexp exp
-                            if not(cmpTy exp.ty formal) then
-                                raise (newError(exppos, sprintf "フィールド %s の型は %O ですが、実際には %O が指定されています。" name formal exp.ty))
-                        | None -> raise (newError(namepos, sprintf "'%s' はレコード %s のメンバーではありません。" name typ))
-                    )
+                    let fields =
+                        x.fields |> checkedMap (fun ((name, namepos), (exp, exppos)) ->
+                            if assignedFields.Contains(name) then
+                                raise (newError(namepos, sprintf "フィールド '%s' はすでに代入されています。" name))
+                            match info.Fields |> List.tryFind (fun (s, _) -> name = s) with
+                            | Some(_, formal) ->
+                                assignedFields.Add(name) |> Debug.Assert
+                                let exp = trexp exp
+                                if not(cmpTy exp.ty formal) then
+                                    raise (newError(exppos, sprintf "フィールド %s の型は %O ですが、実際には %O が指定されています。" name formal exp.ty))
+                                name, exp.exp
+                            | None -> raise (newError(namepos, sprintf "'%s' はレコード %s のメンバーではありません。" name typ)))
 
-                    { exp = (); ty = ty }
+                    { exp = Translate.recordExp info fields; ty = ty }
                 | _ -> raise (newError(typpos, sprintf "型 %s はレコードではありません。" typ))
             | None -> raise (symbolNotExists(typ, typpos))
 
-        | SeqExp(xs) -> transSeqExp env level xs
+        | SeqExp(xs) -> transSeqExp env level breakLabel xs
 
         | AssignExp(x) ->
             let left = trvar x.var
             let right = trexp x.exp
             if not(cmpTy left.ty right.ty) then
                 raise (newError(x.pos, sprintf "左辺の型は %O ですが、右辺の型は %O です。" left.ty right.ty))
-            { exp = (); ty = Types.Void }
+            { exp = Translate.assignExp left.exp right.exp; ty = Types.Void }
 
         | IfExp(x) ->
             let test, testpos = x.test
@@ -165,16 +164,21 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) =
                 let else' = trexp else'
                 if not(cmpTy then'.ty else'.ty) then
                     raise (newError(x.pos, sprintf "then 節と else 節は同じ型でなければいけません。 then: %O, else: %O" then'.ty else'.ty))
-                { exp = (); ty = actualTy then'.ty }
-            | None -> { exp = (); ty = Types.Void }
+                let ty = actualTy then'.ty
+                let exp =
+                    match ty with
+                    | Types.Void -> Translate.ifElseVoid test.exp then'.exp else'.exp
+                    | _ -> Translate.ifElseExp test.exp then'.exp else'.exp ty
+                { exp = exp; ty = ty }
+            | None -> { exp = Translate.ifThen test.exp then'.exp; ty = Types.Void }
 
         | WhileExp(x) ->
             let test, testpos = x.test
             let test = trexp test
             if not(isInt test.ty) then
                 raise (newError(testpos, sprintf "while の条件は int でなければいけませんが、実際には %O が指定されています。" test.ty))
-            trexp x.body |> ignore
-            { exp = (); ty = Types.Void }
+            let breakLabel' = newLabel()
+            { exp = Translate.whileExp test.exp (transExp env level (Some breakLabel') x.body).exp breakLabel'; ty = Types.Void }
 
         | ForExp(x) ->
             let lo, lopos = x.lo
@@ -185,44 +189,45 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) =
             let hi = trexp hi
             if not(isInt hi.ty) then
                 raise (newError(hipos, sprintf "for の最大値は int でなければいけませんが、実際には %O が指定されています。" hi.ty))
-            let venv' = venv.Add(x.var, VarEntry { access = level.CreateVar x.var Types.Int !x.escape; ty = Types.Int })
-            transExp (venv', tenv) level x.body |> ignore
-            { exp = (); ty = Types.Void }
+            let var = level.CreateVar x.var Types.Int !x.escape
+            let venv' = venv.Add(x.var, VarEntry { access = var; ty = Types.Int })
+            let breakLabel' = newLabel()
+            let body = transExp (venv', tenv) level (Some breakLabel') x.body
+            { exp = Translate.forExp var lo.exp hi.exp body.exp breakLabel'; ty = Types.Void }
 
-        | BreakExp(pos) -> { exp = (); ty = Types.Void }
+        | BreakExp(pos) ->
+            match breakLabel with
+            | Some(l) -> { exp = Translate.breakExp l; ty = Types.Void }
+            | None -> raise (newError(pos, "この場所で break することはできません。"))
 
         | ArrayExp(x) ->
             let ty = getty tenv x.typ
-            match ty with
-            | Types.Array(_) -> ()
-            // Unreachable
-            | _ -> raise (newError(x.pos, sprintf "%O は配列型ではありません。" ty))
             let size, sizepos = x.size
             let size = trexp size
             if not(isInt size.ty) then
                 raise (newError(sizepos, sprintf "配列の大きさは int でなければいけませんが、実際には %O が指定されています。" size.ty))
-            { exp = (); ty = actualTy ty }
+            { exp = Translate.arrayExp ty size.exp; ty = Types.Array(actualTy ty) }
 
         | DecExp(x) ->
-            transDec env level x |> ignore
-            { exp = (); ty = Types.Void }
+            transDec env level breakLabel x |> ignore
+            voidExpTy
 
-        | VoidExp | ErrExp -> { exp = (); ty = Types.Void }
+        | VoidExp | ErrExp -> voidExpTy
 
     and trvar var =
         match var with
         | SimpleVar(name, pos) ->
             match venv.TryFind(name) with
-            | Some(VarEntry x) -> { exp = (); ty = actualTy x.ty }
+            | Some(VarEntry x) -> { exp = Translate.simpleVar x.access; ty = actualTy x.ty }
             | Some(_) -> raise (newError(pos, sprintf "'%s' は変数ではないシンボルです。" name))
             | None -> raise (symbolNotExists(name, pos))
 
         | FieldVar((var, varpos), (field, pos)) ->
             let var = trvar var
             match var.ty with
-            | Types.Record(fields, _) as x ->
-                match fields |> List.tryFind (fun (name, _) -> name = field) with
-                | Some(_, ty) -> { exp = (); ty = actualTy ty }
+            | Types.Record(info) as x ->
+                match info.Fields |> List.tryFind (fun (name, _) -> name = field) with
+                | Some(name, ty) -> { exp = Translate.fieldVar var.exp info name; ty = actualTy ty }
                 | None -> raise (newError(pos, sprintf "'%s' はレコード %O のメンバーではありません。" field x))
             | x -> raise (newError(varpos, sprintf "型 %O はレコードではありません。" x))
 
@@ -232,12 +237,12 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) =
                 raise (newError(pos, sprintf "添字は int でなければいけませんが、実際には %O です。" exp.ty))
             let var = trvar var
             match var.ty with
-            | Types.Array(ty) -> { exp = (); ty = actualTy ty }
+            | Types.Array(ty) -> { exp = Translate.subscriptVar var.exp exp.exp; ty = actualTy ty }
             | x -> raise (newError(varpos, sprintf "型 %O は配列ではありません。" x))
 
     trexp
 
-and transDec ((venv, tenv) as env) level dec =
+and transDec ((venv, tenv) as env) level breakLabel dec =
     let getty = getty tenv
 
     match dec with
@@ -248,7 +253,11 @@ and transDec ((venv, tenv) as env) level dec =
             if not(funcNames.Add(name)) then
                 raise (newError(namepos, sprintf "同名の関数 '%s' を同時に宣言することはできません。" name))
             let startPos, _ = x.pos
-            let newLevel = Level(sprintf "%s@%d" name startPos.AbsoluteOffset, Some(level))
+            let returnType =
+                match x.result with
+                | Some(y) -> getty y
+                | None -> Types.Void
+            let newLevel = Level(sprintf "%s@%d" name startPos.AbsoluteOffset, returnType, Some(level))
             level.AddChild(newLevel)
             x, newLevel
         )
@@ -258,12 +267,8 @@ and transDec ((venv, tenv) as env) level dec =
                 |> List.map (fun x ->
                     let name, _ = x.name
                     name, getty x.typ)
-            let result =
-                match dec.result with
-                | Some(x) -> getty x
-                | None -> Types.Void
             let name, _ = dec.name
-            tbl.Add(name, FunEntry { level = newLevel; formals = formals; result = result })
+            tbl.Add(name, FunEntry { level = newLevel; formals = formals; result = newLevel.ReturnType })
         let venv' = List.fold f venv decs
         decs |> loopToCheck (fun (x, newLevel) ->
             let prmNames = HashSet()
@@ -278,7 +283,7 @@ and transDec ((venv, tenv) as env) level dec =
                 tbl.Add(name, VarEntry { access = newLevel.AddArgument name ty !prm.escape; ty = ty })
             let venv'' = List.fold f venv' x.params'
             let body, bodypos = x.body
-            let body = transExp (venv'', tenv) newLevel body
+            let body = transExp (venv'', tenv) newLevel breakLabel body
             match x.result with
             | Some(y) ->
                 let result = getty y
@@ -290,7 +295,7 @@ and transDec ((venv, tenv) as env) level dec =
 
     | VarDec(x) ->
         let init, initpos = x.init
-        let init = transExp env level init
+        let init = transExp env level breakLabel init
         let ty =
             match x.typ with
             | Some(y) ->
@@ -298,7 +303,10 @@ and transDec ((venv, tenv) as env) level dec =
                 if not(cmpTy init.ty ty) then
                     raise (newError(initpos, sprintf "この変数の型は %O と宣言されていますが、右辺は %O です。" ty init.ty))
                 ty
-            | None -> init.ty
+            | None ->
+                if cmpTy init.ty Types.Null then
+                    raise (newError(x.pos, "右辺を null にする場合は方を指定してください。"))
+                init.ty
         let venv' = venv.Add(x.name, VarEntry { access = level.CreateVar x.name ty !x.escape; ty = ty })
         (venv', tenv)
 
@@ -309,19 +317,17 @@ and transDec ((venv, tenv) as env) level dec =
             if not(typeNames.Add(name)) then
                 raise (newError(namepos, sprintf "同名の型 '%s' を同時に宣言することはできません。" name))
         )
-        let tys = decs |> List.map (fun x ->
+        let tys = decs |> List.map (fun x -> x, ref None)
+        let f (tbl: TEnv) (x: TypeDecInfo, tyref) =
             let name, _ = x.name
-            let tyref = ref None
-            name, tyref, x.ty)
-        let f (tbl: TEnv) (name, tyref, _) = tbl.Add(name, Types.Alias(name, tyref))
+            tbl.Add(name, Types.Alias(name, tyref))
         let tenv' = List.fold f tenv tys
-        let trty = transTy tenv'
-        for (_, tyref, dec) in tys do
-            tyref := Some(trty dec)
+        for (x, tyref) in tys do
+            tyref := Some(transTy tenv' x)
         (venv, tenv')
 
 and transTy tenv dec =
-    match dec with
+    match dec.ty with
     | NameTy(x) -> getty tenv x
     | RecordTy(xs) ->
         let fieldNames = HashSet()
@@ -331,31 +337,37 @@ and transTy tenv dec =
                 if not(fieldNames.Add(name)) then
                     raise (newError(namepos, sprintf "フィールド '%s' はすでに宣言されています。" name))
                 name, getty tenv x.typ)
-        Types.Record(fields, Types.newUnique())
+        let name, _ = dec.name
+        Types.Record(Types.RecordInfo(name, fields))
 
-and transSeqExp env level xs =
+and transSeqExp env level breakLabel xs =
     match xs with
-    | [] -> { exp = (); ty = Types.Void }
-    | [exp, pos] -> { exp = (); ty = (transExp env level exp).ty }
+    | [] -> voidExpTy
+    | [exp, pos] -> transExp env level breakLabel exp
     | (exp, pos) :: ys ->
         let mutable errors = []
-        let env' =
+        let exp, env' =
             try
                 match exp with
-                | DecExp(x) -> transDec env level x
-                | _ ->
-                    transExp env level exp |> ignore
-                    env
+                | DecExp(x) -> voidExpTy, transDec env level breakLabel x
+                | _ -> transExp env level breakLabel exp, env
             with SemanticError(es) ->
                 errors <- es
-                env
-        let mutable result = Unchecked.defaultof<ExpTy>
+                voidExpTy, env
+
+        let mutable rest = Unchecked.defaultof<ExpTy>
         try
-            result <- transSeqExp env' level ys
+            rest <- transSeqExp env' level breakLabel ys
         with SemanticError(es) -> errors <- errors @ es
+
         if errors.Length > 0 then
             raise (SemanticError errors)
-        result
+
+        let exp' =
+            match rest.ty with
+            | Types.Void -> Translate.seqVoid exp.exp rest.exp
+            | _ -> Translate.seqExp exp.exp rest.exp
+        { exp = exp'; ty = rest.ty }
 
 and transProg env topLevel (prog: Program) =
-    transExp env topLevel (SeqExp prog)
+    transExp env topLevel None (SeqExp prog)

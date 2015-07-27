@@ -1,39 +1,42 @@
 ﻿module Kirabern.Compiler.Level
 
 type Variable =
-    | NamedVariable of string * Types.Ty
-    | EscapedNamedVariable of string * Types.Ty
-    | TempVariable of Types.Ty
-    | ParameterVaribale of int
-    | EscapedParameterVariable of int * Types.Ty
+    | NamedVariable of Level * string * Types.Ty * unit ref
+    | EscapedNamedVariable of Level * string * Types.Ty
+    | TempVariable of Types.Ty * unit ref
+    | ParameterVaribale of Level * int * Types.Ty
+    | EscapedParameterVariable of Level * int * Types.Ty
 
-type Level(name: string, parent: Level option) =
+and Level(name: string, returnType: Types.Ty, parent: Level option) =
     let arguments = System.Collections.Generic.List<string * Types.Ty>()
-    let locals = System.Collections.Generic.List<Variable>()
     let children = System.Collections.Generic.List<Level>()
+    let mutable needsEscapeClass = false
     member this.Name = name
     member this.Parent = parent
-    member this.AddChild level = children.Add(level)
-    member this.CreateVar name ty escape : VarInLevel =
-        let l =
-            if escape then EscapedNamedVariable(name, ty)
-            else NamedVariable(name, ty)
-        locals.Add(l)
-        this, l
-    member this.AddArgument name ty escape : VarInLevel =
+    member this.ReturnType = returnType
+    member this.AddChild level =
+        needsEscapeClass <- true
+        children.Add(level)
+    member this.CreateVar name ty escape =
+        if escape then
+            needsEscapeClass <- true
+            EscapedNamedVariable(this, name, ty)
+        else
+            NamedVariable(this, name, ty, ref ())
+    member this.AddArgument name ty escape =
         let index = arguments.Count
         arguments.Add((name, ty))
-        let l =
-            if escape then EscapedParameterVariable(index, ty)
-            else ParameterVaribale(index)
-        locals.Add(l)
-        this, l
+        if escape then
+            needsEscapeClass <- true
+            EscapedParameterVariable(this, index, ty)
+        else
+            ParameterVaribale(this, index, ty)
 
-and VarInLevel = Level * Variable
+let newTopLevel () = Level("Main", Types.Void, None)
+let dummyLevel = Level("Dummy", Types.Void, None)
 
-let newTopLevel () = Level("Main", None)
-let dummyLevel = Level("Dummy", None)
+let newTemp ty = TempVariable(ty, ref ())
 
 type Label = unit ref
 
-let newLabel () = ref ()
+let newLabel () : Label = ref ()

@@ -1,6 +1,6 @@
 ﻿module Kirabern.Compiler.Env
 
-type VarEntryInfo = { access: Level.VarInLevel; ty: Types.Ty }
+type VarEntryInfo = { access: Level.Variable; ty: Types.Ty }
 type FunEntryInfo = { level: Level.Level; formals: (string * Types.Ty) list; result: Types.Ty }
 
 type Entry =

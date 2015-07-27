@@ -1113,7 +1113,7 @@ let _fsyacc_reductions ()  =    [|
                 (
                    (
 # 154 "Parser.fsy"
-                                                    ArrayExp { typ = ArrayTyId(_2); size = input(parseState, 4); pos = pos(parseState, 1, 5) } 
+                                                    ArrayExp { typ = _2; size = input(parseState, 4); pos = pos(parseState, 1, 5) } 
                    )
 # 154 "Parser.fsy"
                  : 'exp));

@@ -2,10 +2,16 @@
 open Level
 
 type Exp =
-    | ConstInt of int
-    | ConstString of string
-    | BinOpExp of BinOp
-    | Mem of VarInLevel
+    | Const of int
+    | StringLiteral of string
+    | Null
+    | BinOpExp of BinOp * Exp * Exp
+    | Negate of Exp
+    | NewRecord of Types.RecordInfo
+    | NewArray of Types.Ty * Exp
+    | Var of Variable
+    | Field of Exp * Types.RecordInfo * string
+    | ArrayElem of Exp * Exp
     | CallExp of Level * Exp list
     | ESeq of Stm * Exp
 
@@ -17,6 +23,7 @@ and Stm =
     | CJump of RelOp * Exp * Exp * Label * Label
     | Seq of Stm * Stm
     | Label of Label
+    | Nop
 
 and BinOp =
     | Plus | Minus | Mul | Div
@@ -25,4 +32,3 @@ and BinOp =
 and RelOp =
     | Eq | Ne | Lt | Gt | Le | Ge
     | ULt | ULe | UGt | UGe
-
