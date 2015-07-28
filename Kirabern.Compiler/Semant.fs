@@ -4,7 +4,6 @@ open System.Diagnostics
 open Microsoft.FSharp.Text.Lexing
 open Absyn
 open Env
-open Level
 
 type VEnv = Map<string, Env.Entry>
 type TEnv = Map<string, Types.Ty>
@@ -64,7 +63,7 @@ let rec getty (tenv: TEnv) tyid =
         | None -> raise (symbolNotExists(name, pos))
     | ArrayTyId(x) -> Types.Array(getty tenv x)
 
-let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) breakLabel =
+let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: IR.Level) breakLabel =
     let rec trexp exp =
         match exp with
         | VarExp(var) -> trvar var
@@ -177,7 +176,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) breakLabel =
             let test = trexp test
             if not(isInt test.ty) then
                 raise (newError(testpos, sprintf "while の条件は int でなければいけませんが、実際には %O が指定されています。" test.ty))
-            let breakLabel' = newLabel()
+            let breakLabel' = IR.newLabel()
             { exp = Translate.whileExp test.exp (transExp env level (Some breakLabel') x.body).exp breakLabel'; ty = Types.Void }
 
         | ForExp(x) ->
@@ -191,7 +190,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) breakLabel =
                 raise (newError(hipos, sprintf "for の最大値は int でなければいけませんが、実際には %O が指定されています。" hi.ty))
             let var = level.CreateVar(x.var, Types.Int, !x.escape)
             let venv' = venv.Add(x.var, VarEntry { access = var; ty = Types.Int })
-            let breakLabel' = newLabel()
+            let breakLabel' = IR.newLabel()
             let body = transExp (venv', tenv) level (Some breakLabel') x.body
             { exp = Translate.forExp var lo.exp hi.exp body.exp breakLabel'; ty = Types.Void }
 
@@ -209,8 +208,8 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) breakLabel =
             { exp = Translate.arrayExp ty size.exp; ty = Types.Array(actualTy ty) }
 
         | DecExp(x) ->
-            transDec env level breakLabel x |> ignore
-            voidExpTy
+            let exp, _ = transDec env level breakLabel x
+            exp
 
         | VoidExp | ErrExp -> voidExpTy
 
@@ -283,13 +282,13 @@ and transDec ((venv, tenv) as env) level breakLabel dec =
             let body, bodypos = x.body
             let body = transExp (venv'', tenv) newLevel breakLabel body
             match x.result with
-            | Some(y) ->
-                let result = getty y
-                if not(cmpTy body.ty result) then
-                    raise (newError(bodypos, sprintf "戻り値の型は %O と宣言されていますが、実際には %O です。" result body.ty))
+            | Some(_) ->
+                if not(cmpTy body.ty newLevel.ReturnType) then
+                    raise (newError(bodypos, sprintf "戻り値の型は %O と宣言されていますが、実際には %O です。" newLevel.ReturnType body.ty))
             | None -> ()
+            newLevel.Body <- Translate.funcBody body.exp newLevel.ReturnType
         )
-        (venv', tenv)
+        voidExpTy, (venv', tenv)
 
     | VarDec(x) ->
         let init, initpos = x.init
@@ -305,8 +304,9 @@ and transDec ((venv, tenv) as env) level breakLabel dec =
                 if cmpTy init.ty Types.Null then
                     raise (newError(x.pos, "右辺を null にする場合は方を指定してください。"))
                 init.ty
-        let venv' = venv.Add(x.name, VarEntry { access = level.CreateVar(x.name, ty, !x.escape); ty = ty })
-        (venv', tenv)
+        let var = level.CreateVar(x.name, ty, !x.escape)
+        let venv' = venv.Add(x.name, VarEntry { access = var; ty = ty })
+        { exp = Translate.assignExp (Translate.simpleVar var) init.exp; ty = Types.Void }, (venv', tenv)
 
     | TypeDec(decs) ->
         let typeNames = HashSet()
@@ -322,7 +322,7 @@ and transDec ((venv, tenv) as env) level breakLabel dec =
         let tenv' = List.fold f tenv tys
         for (x, tyref) in tys do
             tyref := Some(transTy tenv' x)
-        (venv, tenv')
+        voidExpTy, (venv, tenv')
 
 and transTy tenv dec =
     match dec.ty with
@@ -347,7 +347,7 @@ and transSeqExp env level breakLabel xs =
         let exp, env' =
             try
                 match exp with
-                | DecExp(x) -> voidExpTy, transDec env level breakLabel x
+                | DecExp(x) -> transDec env level breakLabel x
                 | _ -> transExp env level breakLabel exp, env
             with SemanticError(es) ->
                 errors <- es
@@ -368,4 +368,5 @@ and transSeqExp env level breakLabel xs =
         { exp = exp'; ty = rest.ty }
 
 and transProg env topLevel (prog: Program) =
-    transExp env topLevel None (SeqExp prog)
+    let x = transExp env topLevel None (SeqExp prog)
+    topLevel.Body <- Translate.funcBody x.exp Types.Void

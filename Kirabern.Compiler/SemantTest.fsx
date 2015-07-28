@@ -6,8 +6,9 @@ open Kirabern.Compiler.Semant
 let program = TestUtils.parseProgram()
 
 try
-    let exp = transProg (Env.baseVEnv, Env.baseTEnv) (Level.newTopLevel()) program
-    printfn "%+A" exp
+    let topLevel = IR.newTopLevel()
+    transProg (Env.baseVEnv topLevel, Env.baseTEnv) topLevel program
+    printfn "%+A" topLevel.Body
 with SemanticError(es) -> 
     for e in es do
         printfn "%+A" e
