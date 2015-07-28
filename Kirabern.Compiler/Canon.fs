@@ -73,3 +73,67 @@ let linearize (stm0: Stm) : Stm list =
         | s, l -> s :: l
 
     linear(doStm stm0, [])
+
+let basicBlock stms =
+    let finish = newLabel()
+    let rec blocks stms blist =
+        match stms with
+        | (Label(_) as head) :: tail ->
+            let rec next xs thisblock =
+                match xs with
+                | (Jump(_) as s) :: rest -> endblock rest (s :: thisblock)
+                | (CJump(_) as s) :: rest -> endblock rest (s :: thisblock)
+                | (Label(lab) :: _) as stms -> next (Jump(lab) :: stms) thisblock
+                | s :: rest -> next rest (s :: thisblock)
+                | [] -> next [Jump(finish)] thisblock
+
+            and endblock stms thisblock = blocks stms (List.rev(thisblock) :: blist)
+
+            next tail [head]
+        | [] -> List.rev blist
+        | stms -> blocks (Label(newLabel()) :: stms) blist
+    blocks stms [], finish
+
+let private enterblock b (table: Map<Label, Stm list>) =
+    match b with
+    | Label(s) :: _ -> table.Add(s, b)
+    | _ -> table
+
+let rec private splitlast xs =
+    match xs with
+    | [x] -> [], x
+    | h :: t ->
+        let t', last = splitlast t
+        h :: t', last
+
+let rec private trace (table: Map<Label, Stm list>) b rest =
+    match b with
+    | Label(lab) :: _ ->
+        let table = table.Add(lab, [])
+        match splitlast b with
+        | most, Jump(lab) ->
+            match table.TryFind(lab) with
+            | Some((_ :: _) as b') -> most @ trace table b' rest
+            | _ -> b @ getnext table rest
+        | most, CJump(opr, x, y, t, f) ->
+            match table.TryFind(t), table.TryFind(f) with
+            | _, Some((_ :: _) as b') -> b @ trace table b' rest
+            | Some((_ :: _) as b'), _ ->
+                most @ [CJump(notRel opr, x, y, f, t)] @ trace table b' rest
+            | _ ->
+                let f' = newLabel()
+                most @ [CJump(opr, x, y, t, f'); Label(f'); Jump(f)] @ getnext table rest
+//      | most, Jump(_) -> b @ getnext table rest
+        | _ -> failwith "does not end with Jump"
+    | _ -> failwith "does not start with Label"
+
+and getnext table b =
+    match b with
+    | ((Label(lab) :: _) as b) :: rest ->
+        match table.TryFind(lab) with
+        | Some(_ :: _) -> trace table b rest
+        | _ -> getnext table rest
+    | [] -> []
+
+let traceSchedule (blocks, finish) =
+    getnext (List.foldBack enterblock blocks Map.empty) blocks @ [Label(finish)]

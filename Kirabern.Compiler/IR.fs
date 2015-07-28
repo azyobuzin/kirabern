@@ -105,3 +105,16 @@ let rec getExpTy exp =
     | CallExp(l, _) -> l.ReturnType
     | CallStaticMethodExp(_, _, x) -> x
     | ESeq(_, x) -> getExpTy x
+
+let notRel rel =
+    match rel with
+    | Eq -> Ne
+    | Ne -> Eq
+    | Lt -> Ge
+    | Gt -> Le
+    | Le -> Gt
+    | Ge -> Lt
+    | ULt -> UGe
+    | ULe -> UGt
+    | UGt -> ULe
+    | UGe -> ULt

@@ -160,4 +160,4 @@ let funcBody exp ty =
         match ty with
         | Types.Void -> Seq(unNx exp, Ret(None))
         | _ -> Ret(Some(unEx exp))
-    Canon.linearize stm
+    Canon.traceSchedule(Canon.basicBlock(Canon.linearize stm))
