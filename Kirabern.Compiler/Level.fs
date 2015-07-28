@@ -9,21 +9,26 @@ type Variable =
 
 and Level(name: string, returnType: Types.Ty, parent: Level option) =
     let arguments = System.Collections.Generic.List<string * Types.Ty>()
-    let children = System.Collections.Generic.List<Level>()
+    //let children = System.Collections.Generic.List<Level>()
     let mutable needsEscapeClass = false
     member this.Name = name
     member this.Parent = parent
     member this.ReturnType = returnType
+    (*
     member this.AddChild level =
         needsEscapeClass <- true
         children.Add(level)
-    member this.CreateVar name ty escape =
+    *)
+    member this.CreateChild (name, returnType) =
+        needsEscapeClass <- true
+        Level(name, returnType, Some(this))
+    member this.CreateVar (name, ty, escape) =
         if escape then
             needsEscapeClass <- true
             EscapedNamedVariable(this, name, ty)
         else
             NamedVariable(this, name, ty, ref ())
-    member this.AddArgument name ty escape =
+    member this.AddArgument (name, ty, escape) =
         let index = arguments.Count
         arguments.Add((name, ty))
         if escape then

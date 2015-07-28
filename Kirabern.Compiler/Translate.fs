@@ -125,17 +125,17 @@ let forExp var lo hi body breakLabel =
     let hiTmp = newTemp Types.Int
     let hiExp, hiInit =
         match hi with
-        | Ex(Tree.Const(i)) -> Tree.Const(i), []
+        | Ex(Tree.Const(_) as x) | Ex(Tree.Var(_) as x) -> x, []
         | _ -> Tree.Var hiTmp, [Tree.Store(Tree.Var hiTmp, unEx hi)]
     let header = Tree.Store(Tree.Var var, unEx lo) :: hiInit
     Nx(seq (header @ [ Tree.Label start
                        Tree.CJump(Tree.Le, Tree.Var var, hiExp, bodyLabel, breakLabel)
                        Tree.Label bodyLabel
                        unNx body
-                       Tree.CJump(Tree.Eq, Tree.Var var, hiExp, breakLabel, incLabel)
+                       Tree.CJump(Tree.Lt, Tree.Var var, hiExp, incLabel, breakLabel)
                        Tree.Label incLabel
                        Tree.Store(Tree.Var var, Tree.BinOpExp(Tree.Plus, Tree.Var var, Tree.Const 1))
-                       Tree.Jump start
+                       Tree.Jump bodyLabel
                        Tree.Label breakLabel ]))
 
 let breakExp label = Nx(Tree.Jump label)

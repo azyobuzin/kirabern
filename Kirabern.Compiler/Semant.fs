@@ -189,7 +189,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: Level) breakLabel =
             let hi = trexp hi
             if not(isInt hi.ty) then
                 raise (newError(hipos, sprintf "for の最大値は int でなければいけませんが、実際には %O が指定されています。" hi.ty))
-            let var = level.CreateVar x.var Types.Int !x.escape
+            let var = level.CreateVar(x.var, Types.Int, !x.escape)
             let venv' = venv.Add(x.var, VarEntry { access = var; ty = Types.Int })
             let breakLabel' = newLabel()
             let body = transExp (venv', tenv) level (Some breakLabel') x.body
@@ -257,9 +257,7 @@ and transDec ((venv, tenv) as env) level breakLabel dec =
                 match x.result with
                 | Some(y) -> getty y
                 | None -> Types.Void
-            let newLevel = Level(sprintf "%s@%d" name startPos.AbsoluteOffset, returnType, Some(level))
-            level.AddChild(newLevel)
-            x, newLevel
+            x, level.CreateChild(sprintf "%s@%d" name startPos.AbsoluteOffset, returnType)
         )
         let f (tbl: VEnv) (dec, newLevel) =
             let formals =
@@ -280,7 +278,7 @@ and transDec ((venv, tenv) as env) level breakLabel dec =
             let f (tbl: VEnv) prm =
                 let name, _ = prm.name
                 let ty = getty prm.typ
-                tbl.Add(name, VarEntry { access = newLevel.AddArgument name ty !prm.escape; ty = ty })
+                tbl.Add(name, VarEntry { access = newLevel.AddArgument(name, ty, !prm.escape); ty = ty })
             let venv'' = List.fold f venv' x.params'
             let body, bodypos = x.body
             let body = transExp (venv'', tenv) newLevel breakLabel body
@@ -307,7 +305,7 @@ and transDec ((venv, tenv) as env) level breakLabel dec =
                 if cmpTy init.ty Types.Null then
                     raise (newError(x.pos, "右辺を null にする場合は方を指定してください。"))
                 init.ty
-        let venv' = venv.Add(x.name, VarEntry { access = level.CreateVar x.name ty !x.escape; ty = ty })
+        let venv' = venv.Add(x.name, VarEntry { access = level.CreateVar(x.name, ty, !x.escape); ty = ty })
         (venv', tenv)
 
     | TypeDec(decs) ->
