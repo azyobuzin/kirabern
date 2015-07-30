@@ -43,12 +43,13 @@ and Variable =
     | EscapedParameterVariable of Level * int * Types.Ty
 
 and Level(name: string, returnType: Types.Ty, parent: Level option) =
-    let parameters = System.Collections.Generic.List<string * Types.Ty>()
+    let parameters = System.Collections.Generic.List<string * Types.Ty * bool>()
     let mutable needsEscapeClass = false
+    let mutable varNum = 0
     member this.Name = name
     member this.Parent = parent
     member this.ReturnType = returnType
-    member this.Parameters = parameters :> System.Collections.Generic.IReadOnlyList<string * Types.Ty>
+    member this.Parameters = parameters :> System.Collections.Generic.IReadOnlyList<string * Types.Ty * bool>
     member this.NeedsEscapeClass = needsEscapeClass
     member this.CreateChild (name, returnType) =
         needsEscapeClass <- true
@@ -56,12 +57,14 @@ and Level(name: string, returnType: Types.Ty, parent: Level option) =
     member this.CreateVar (name, ty, escape) =
         if escape then
             needsEscapeClass <- true
-            EscapedNamedVariable(this, name, ty)
+            let n = varNum
+            varNum <- n + 1
+            EscapedNamedVariable(this, sprintf "%s@%d" name n, ty)
         else
             NamedVariable(this, name, ty, ref ())
     member this.AddParameter (name, ty, escape) =
         let index = parameters.Count
-        parameters.Add((name, ty))
+        parameters.Add((name, ty, escape))
         if escape then
             needsEscapeClass <- true
             EscapedParameterVariable(this, index, ty)

@@ -9,84 +9,125 @@ type Universe(moduleBuilder: ModuleBuilder) =
     let createdRecords = Collections.Generic.Dictionary<Types.RecordInfo, Type>()
     let parentFieldTable = Collections.Generic.Dictionary<Level, FieldInfo>()
     let escapeClassTable = Collections.Generic.Dictionary<Level, Type>()
+
+    member this.ModuleBuilder = moduleBuilder
+    member this.ParentFieldTable = parentFieldTable
+    member this.EscapeClassTable = escapeClassTable
     
-    let rec reflectionType ty = 
+    member this.ReflectionType(ty) = 
         match Types.actualTy ty with
         | Types.Null -> typeof<obj>
         | Types.Int -> typeof<int>
         | Types.String -> typeof<string>
-        | Types.Record(x) -> getOrCreateRecordType x
-        | Types.Array(x) -> (reflectionType x).MakeArrayType()
+        | Types.Record(x) -> this.GetOrCreateRecordType(x)
+        | Types.Array(x) -> this.ReflectionType(x).MakeArrayType()
         | Types.Alias(_) -> failwith "unreachable"
         | Types.Void -> typeof<Void>
         
-    and getOrCreateRecordType (info: Types.RecordInfo) =
+    member this.GetOrCreateRecordType(info: Types.RecordInfo) =
         let mutable ret = null
         if not(createdRecords.TryGetValue(info, &ret)) then
             let t = moduleBuilder.DefineType(info.Name, TypeAttributes.NotPublic &&& TypeAttributes.Sealed &&& TypeAttributes.Class)
             for (name, ty) in info.Fields do
-                t.DefineField(name, reflectionType ty, FieldAttributes.Public) |> ignore
+                t.DefineField(name, this.ReflectionType(ty), FieldAttributes.Public) |> ignore
             ret <- t.CreateType()
             createdRecords.Add(info, ret)
         ret
-    
+
+    member this.AddClass(t) = classes.Add(t)
+
     member this.CreateAllClasses() = 
         for c in classes do
             c.CreateType() |> ignore
         classes.Clear()
     
-    member this.EmitFunction(l: Level, container: TypeBuilder) = 
-        let isStatic = l.Parent.IsNone
+type FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) =
+    let isStatic = level.Parent.IsNone
+    let escapeClass, escapeClassCtor, paramVars =
+        if level.NeedsEscapeClass then
+            let t = univ.ModuleBuilder.DefineType(level.Name, TypeAttributes.NotPublic &&& TypeAttributes.Sealed &&& TypeAttributes.Class)
+            univ.AddClass(t)
+            univ.EscapeClassTable.Add(level, t)
+
+            let ctor =
+                if not isStatic then
+                    let parentType = univ.EscapeClassTable.[level.Parent.Value]
+                    let fld = t.DefineField("$parent$", parentType, FieldAttributes.Assembly &&& FieldAttributes.InitOnly)
+                    univ.ParentFieldTable.Add(level, fld)
+                    let ctor = t.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard, [| parentType |])
+                    let ctorIl = ctor.GetILGenerator()
+                    ctorIl.Emit(OpCodes.Ldarg_0)
+                    ctorIl.Emit(OpCodes.Callvirt, typeof<obj>.GetConstructor(Type.EmptyTypes))
+                    ctorIl.Emit(OpCodes.Ldarg_0)
+                    ctorIl.Emit(OpCodes.Ldarg_1)
+                    ctorIl.Emit(OpCodes.Stfld, fld)
+                    ctorIl.Emit(OpCodes.Ret)
+                    ctor
+                else t.DefineDefaultConstructor(MethodAttributes.Assembly)
+
+            let paramVars =
+                level.Parameters
+                |> Seq.mapi (fun i (_, ty, escape) ->
+                    i, (if escape then
+                            Some(t.DefineField(sprintf "$arg%d$" i, univ.ReflectionType(ty), FieldAttributes.Assembly))
+                        else None))
+                |> Seq.choose(fun (i, x) ->
+                    match x with
+                    | Some(y) -> Some(i, y)
+                    | None -> None)
+                |> Map.ofSeq
+
+            (*il.Emit(OpCodes.Ldloc, v)
+            ldarg i
+            il.Emit(OpCodes.Stfld, f))*)
+            
+
+            (*if not isStatic then
+                il.Emit(OpCodes.Ldarg_0)
+            il.Emit(OpCodes.Newobj, ctor)
+            let v = il.DeclareLocal(t)
+            il.Emit(OpCodes.Stloc, v)
+
+            level.Parameters |> Seq.iteri (fun i (_, ty, escape) ->
+                if escape then
+                    let f = t.DefineField(sprintf "$arg%d$" i, univ.ReflectionType(ty), FieldAttributes.Assembly)
+                    il.Emit(OpCodes.Ldloc, v)
+                    ldarg i
+                    il.Emit(OpCodes.Stfld, f))*)
+
+            Some(t), Some(ctor), paramVars
+        else
+            None, None, Map.empty
+
+    member this.GetVariableField(var) =
+        raise (NotImplementedException())
+
+    member this.Emit() =
+        let isStatic = level.Parent.IsNone
         let baseMethodAttr = MethodAttributes.Assembly        
         let methodAttr = 
             if isStatic then baseMethodAttr &&& MethodAttributes.Static
             else baseMethodAttr &&& MethodAttributes.Final        
         let methodBuilder = 
-            container.DefineMethod(l.Name, methodAttr, reflectionType l.ReturnType, 
-                                   l.Parameters
-                                   |> Seq.map (fun (_, ty) -> reflectionType ty)
+            container.DefineMethod(level.Name, methodAttr, univ.ReflectionType(level.ReturnType), 
+                                   level.Parameters
+                                   |> Seq.map (fun (_, ty, _) -> univ.ReflectionType(ty))
                                    |> Seq.toArray)        
-        l.Parameters |> Seq.iteri (fun i (name, _) ->
+        level.Parameters |> Seq.iteri (fun i (name, _, _) ->
             methodBuilder.DefineParameter(i, ParameterAttributes.None, name) |> ignore)
 
         let il = methodBuilder.GetILGenerator()
         let localTable = Collections.Generic.Dictionary<Variable, LocalBuilder>()
         let labelTable = Collections.Generic.Dictionary<Label, Emit.Label>()
-
-        let escapeData =
-            if l.NeedsEscapeClass then
-                let t = moduleBuilder.DefineType(l.Name, TypeAttributes.NotPublic &&& TypeAttributes.Sealed &&& TypeAttributes.Class)
-                classes.Add(t)
-                escapeClassTable.Add(l, t)
-
-                let ctor =
-                    if not isStatic then
-                        let parentType = escapeClassTable.[l.Parent.Value]
-                        let fld = t.DefineField("$parent$", parentType, FieldAttributes.Assembly &&& FieldAttributes.InitOnly)
-                        parentFieldTable.Add(l, fld)
-                        let ctor = t.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard, [| parentType |])
-                        let ctorIl = ctor.GetILGenerator()
-                        ctorIl.Emit(OpCodes.Ldarg_0)
-                        ctorIl.Emit(OpCodes.Callvirt, typeof<obj>.GetConstructor(Type.EmptyTypes))
-                        ctorIl.Emit(OpCodes.Ldarg_0)
-                        ctorIl.Emit(OpCodes.Ldarg_1)
-                        ctorIl.Emit(OpCodes.Stfld, fld)
-                        ctorIl.Emit(OpCodes.Ret)
-                        ctor
-                    else t.DefineDefaultConstructor(MethodAttributes.Assembly)
-
-                if not isStatic then
-                    il.Emit(OpCodes.Ldarg_0)
-                il.Emit(OpCodes.Newobj, ctor)
-                let v = il.DeclareLocal(t)
-                il.Emit(OpCodes.Stloc, v)
-                Some(t, v)
-            else None
-
+                
         let getLocal var =
             let mutable ret = null
             if not(localTable.TryGetValue(var, &ret)) then
-                ret <- il.DeclareLocal(reflectionType(getVarTy var))
+                ret <- il.DeclareLocal(univ.ReflectionType(getVarTy var))
+                match var with
+                | NamedVariable(_, name, _, _) -> ret.SetLocalSymInfo(name)
+                | TempVariable(_) -> ()
+                | _ -> failwith "not a local"
                 localTable.Add(var, ret)
             ret
 
@@ -106,6 +147,44 @@ type Universe(moduleBuilder: ModuleBuilder) =
             | 3 -> il.Emit(OpCodes.Ldarg_3)
             | _ when i <= 255 -> il.Emit(OpCodes.Ldarg_S, byte i)
             | _ -> il.Emit(OpCodes.Ldarg, int16 i)
+
+        let escapeData =
+            if level.NeedsEscapeClass then
+                let t = univ.ModuleBuilder.DefineType(level.Name, TypeAttributes.NotPublic &&& TypeAttributes.Sealed &&& TypeAttributes.Class)
+                univ.AddClass(t)
+                univ.EscapeClassTable.Add(level, t)
+
+                let ctor =
+                    if not isStatic then
+                        let parentType = univ.EscapeClassTable.[level.Parent.Value]
+                        let fld = t.DefineField("$parent$", parentType, FieldAttributes.Assembly &&& FieldAttributes.InitOnly)
+                        univ.ParentFieldTable.Add(level, fld)
+                        let ctor = t.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard, [| parentType |])
+                        let ctorIl = ctor.GetILGenerator()
+                        ctorIl.Emit(OpCodes.Ldarg_0)
+                        ctorIl.Emit(OpCodes.Callvirt, typeof<obj>.GetConstructor(Type.EmptyTypes))
+                        ctorIl.Emit(OpCodes.Ldarg_0)
+                        ctorIl.Emit(OpCodes.Ldarg_1)
+                        ctorIl.Emit(OpCodes.Stfld, fld)
+                        ctorIl.Emit(OpCodes.Ret)
+                        ctor
+                    else t.DefineDefaultConstructor(MethodAttributes.Assembly)
+
+                if not isStatic then
+                    il.Emit(OpCodes.Ldarg_0)
+                il.Emit(OpCodes.Newobj, ctor)
+                let v = il.DeclareLocal(t)
+                il.Emit(OpCodes.Stloc, v)
+
+                level.Parameters |> Seq.iteri (fun i (_, ty, escape) ->
+                    if escape then
+                        let f = t.DefineField(sprintf "$arg%d$" i, univ.ReflectionType(ty), FieldAttributes.Assembly)
+                        il.Emit(OpCodes.Ldloc, v)
+                        ldarg i
+                        il.Emit(OpCodes.Stfld, f))
+
+                Some(t, v)
+            else None
 
         let rec emitExp =
             function
@@ -143,14 +222,17 @@ type Universe(moduleBuilder: ModuleBuilder) =
             | Negate(x) ->
                 emitExp x
                 il.Emit(OpCodes.Neg)
-            | NewRecord(x) -> il.Emit(OpCodes.Newobj, (getOrCreateRecordType x).GetConstructor(Type.EmptyTypes))
+            | NewRecord(x) -> il.Emit(OpCodes.Newobj, univ.GetOrCreateRecordType(x).GetConstructor(Type.EmptyTypes))
             | NewArray(ty, size) ->
                 emitExp size
-                il.Emit(OpCodes.Newarr, reflectionType ty)
-            | Var(x) -> failwith "Not implemented yet"
+                il.Emit(OpCodes.Newarr, univ.ReflectionType(ty))
+            | Var(x) ->
+                match x with
+                | NamedVariable(_) | TempVariable(_) -> il.Emit(OpCodes.Ldloc, getLocal x)
+                | ParameterVaribale(_, i, _) -> ldarg i
             | Field(x, record, field) ->
                 emitExp x
-                il.Emit(OpCodes.Ldfld, (getOrCreateRecordType record).GetField(field))
+                il.Emit(OpCodes.Ldfld, univ.GetOrCreateRecordType(record).GetField(field))
             | ArrayElem(arr, idx) ->
                 emitExp arr
                 emitExp idx
@@ -208,4 +290,4 @@ type Universe(moduleBuilder: ModuleBuilder) =
                 match x with | Some(y) -> emitExp y | None -> ()
                 il.Emit(OpCodes.Ret)
                 
-        List.iter emitStm l.Body
+        List.iter emitStm level.Body
