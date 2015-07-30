@@ -78,6 +78,7 @@
     <Compile Include="Translate.fs" />
     <Compile Include="Env.fs" />
     <Compile Include="Semant.fs" />
+    <Compile Include="Emit.fs" />
     <Content Include="app.config" />
     <Content Include="packages.config" />
     <None Include="TestUtils.fsx" />

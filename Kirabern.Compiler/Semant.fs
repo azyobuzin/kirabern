@@ -277,7 +277,7 @@ and transDec ((venv, tenv) as env) level breakLabel dec =
             let f (tbl: VEnv) prm =
                 let name, _ = prm.name
                 let ty = getty prm.typ
-                tbl.Add(name, VarEntry { access = newLevel.AddArgument(name, ty, !prm.escape); ty = ty })
+                tbl.Add(name, VarEntry { access = newLevel.AddParameter(name, ty, !prm.escape); ty = ty })
             let venv'' = List.fold f venv' x.params'
             let body, bodypos = x.body
             let body = transExp (venv'', tenv) newLevel breakLabel body
@@ -336,7 +336,8 @@ and transTy tenv dec =
                     raise (newError(namepos, sprintf "フィールド '%s' はすでに宣言されています。" name))
                 name, getty tenv x.typ)
         let name, _ = dec.name
-        Types.Record(Types.RecordInfo(name, fields))
+        let startPos, _ = dec.pos
+        Types.Record(Types.RecordInfo(sprintf "%s@%d" name startPos.AbsoluteOffset, fields))
 
 and transSeqExp env level breakLabel xs =
     match xs with

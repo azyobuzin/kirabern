@@ -15,7 +15,7 @@ let baseTEnv =
 let baseVEnv (topLevel: Level) = 
     let entry name methodInfo args result = 
         let l = topLevel.CreateChild("$" + name, result)
-        let exps = args |> List.map (fun (name, ty) -> Var(l.AddArgument(name, ty, false)))
+        let exps = args |> List.map (fun (name, ty) -> Var(l.AddParameter(name, ty, false)))
         l.Body <- match result with
                   | Types.Void -> 
                       [ CallStaticMethodStm(methodInfo, exps)
@@ -28,7 +28,7 @@ let baseVEnv (topLevel: Level) =
     
     let notEntry = 
         let l = topLevel.CreateChild("$not", Types.Int)
-        let var = Var(l.AddArgument("value", Types.Int, false))
+        let var = Var(l.AddParameter("value", Types.Int, false))
         let t, f = newLabel(), newLabel()
         l.Body <- [ CJump(Eq, var, Const 0, t, f)
                     Label f
@@ -43,8 +43,7 @@ let baseVEnv (topLevel: Level) =
     Map.ofArray [| entry "print" (typeof<System.Console>.GetMethod("Write", [| typeof<string> |])) [ "value", Types.String ] Types.Void
                    entry "println" (typeof<System.Console>.GetMethod("WriteLine", [| typeof<string> |])) [ "value", Types.String ] Types.Void
                    entry "readLine" (typeof<System.Console>.GetMethod("ReadLine")) [] Types.String                   
-                   entry "parseInt" (typeof<int32>.GetMethod("Parse", [| typeof<string> |])) [ "s", Types.String ] Types.Int
+                   entry "parseInt" (typeof<int>.GetMethod("Parse", [| typeof<string> |])) [ "s", Types.String ] Types.Int
                    entry "intToString" (typeof<System.Convert>.GetMethod("ToString", [| typeof<int32> |])) [ "value", Types.Int ] Types.String
                    notEntry
                    entry "exit" (typeof<System.Environment>.GetMethod("Exit")) [ "exitCode", Types.Int ] Types.Void |]
-

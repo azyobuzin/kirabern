@@ -43,11 +43,13 @@ and Variable =
     | EscapedParameterVariable of Level * int * Types.Ty
 
 and Level(name: string, returnType: Types.Ty, parent: Level option) =
-    let arguments = System.Collections.Generic.List<string * Types.Ty>()
+    let parameters = System.Collections.Generic.List<string * Types.Ty>()
     let mutable needsEscapeClass = false
     member this.Name = name
     member this.Parent = parent
     member this.ReturnType = returnType
+    member this.Parameters = parameters :> System.Collections.Generic.IReadOnlyList<string * Types.Ty>
+    member this.NeedsEscapeClass = needsEscapeClass
     member this.CreateChild (name, returnType) =
         needsEscapeClass <- true
         Level(name, returnType, Some(this))
@@ -57,9 +59,9 @@ and Level(name: string, returnType: Types.Ty, parent: Level option) =
             EscapedNamedVariable(this, name, ty)
         else
             NamedVariable(this, name, ty, ref ())
-    member this.AddArgument (name, ty, escape) =
-        let index = arguments.Count
-        arguments.Add((name, ty))
+    member this.AddParameter (name, ty, escape) =
+        let index = parameters.Count
+        parameters.Add((name, ty))
         if escape then
             needsEscapeClass <- true
             EscapedParameterVariable(this, index, ty)
@@ -77,16 +79,16 @@ let newTemp ty = TempVariable(ty, ref ())
 
 let newLabel () : Label = ref ()
 
-let getVarTy var =
-    match var with
+let getVarTy =
+    function
     | NamedVariable(_, _, x, _)
     | EscapedNamedVariable(_, _, x)
     | TempVariable(x, _)
     | ParameterVaribale(_, _, x)
     | EscapedParameterVariable(_, _, x) -> x
 
-let rec getExpTy exp =
-    match exp with
+let rec getExpTy =
+    function
     | Const(_) -> Types.Int
     | StringLiteral(_) -> Types.String
     | Null -> Types.Null
@@ -106,8 +108,8 @@ let rec getExpTy exp =
     | CallStaticMethodExp(_, _, x) -> x
     | ESeq(_, x) -> getExpTy x
 
-let notRel rel =
-    match rel with
+let notRel =
+    function
     | Eq -> Ne
     | Ne -> Eq
     | Lt -> Ge

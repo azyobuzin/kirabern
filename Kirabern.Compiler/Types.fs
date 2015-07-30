@@ -28,8 +28,8 @@ and RecordInfo(name: string, fields: (string * Ty) list) =
     member this.Name = name
     member this.Fields = fields
 
-let rec actualTy ty =
-    match ty with
+let rec actualTy =
+    function 
     | Alias(_, x) -> actualTy (!x).Value
     | Array(x) -> Array(actualTy x)
     | x -> x
