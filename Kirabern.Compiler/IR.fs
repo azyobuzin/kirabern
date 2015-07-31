@@ -69,7 +69,7 @@ and Level(name: string, returnType: Types.Ty, parent: Level option) =
             EscapedParameterVariable(this, index, ty)
         else
             ParameterVaribale(this, index, ty)
-    member val Body = [] : Stm list with get, set
+    member val Body = Nop : Stm with get, set
     override this.ToString() = sprintf "Level '%s'" name
 
 and Label = UniqueId

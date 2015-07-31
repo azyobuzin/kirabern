@@ -18,9 +18,8 @@ let baseVEnv =
         let exps = args |> List.map (fun (name, ty) -> Var(l.AddParameter(name, ty, false)))
         l.Body <- match result with
                   | Types.Void -> 
-                      [ CallStaticMethodStm(methodInfo, exps)
-                        Ret(None) ]
-                  | _ -> [ Ret(Some(CallStaticMethodExp(methodInfo, exps, result))) ]
+                      Seq(CallStaticMethodStm(methodInfo, exps), Ret(None))
+                  | _ -> Ret(Some(CallStaticMethodExp(methodInfo, exps, result)))
         name, 
         FunEntry { level = l
                    formals = args
@@ -30,11 +29,10 @@ let baseVEnv =
         let l = Level("$not", Types.Int, None)
         let var = Var(l.AddParameter("value", Types.Int, false))
         let t, f = newLabel(), newLabel()
-        l.Body <- [ CJump(Eq, var, Const 0, t, f)
-                    MarkLabel f
-                    Ret(Some(Const 0))
-                    MarkLabel t
-                    Ret(Some(Const 1)) ]
+        l.Body <- Seq(CJump(Eq, var, Const 0, t, f),
+            Seq(MarkLabel f,
+                Seq(Ret(Some(Const 0)),
+                    Seq(MarkLabel t, Ret(Some(Const 1))))))
         "not", 
         FunEntry { level = l
                    formals = [ "value", Types.Int ]

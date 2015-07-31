@@ -346,4 +346,4 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             List.iter emitExp args
             il.EmitCall(OpCodes.Call, m, null)
                 
-        List.iter emitStm level.Body
+        emitStm level.Body

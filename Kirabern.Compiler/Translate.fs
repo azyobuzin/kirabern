@@ -156,8 +156,6 @@ let seqVoid x xs = Nx(Seq(unNx x, unNx xs))
 let seqExp x xs = Ex(ESeq(unNx x, unEx xs))
 
 let funcBody exp ty =
-    let stm =
-        match ty with
-        | Types.Void -> Seq(unNx exp, Ret(None))
-        | _ -> Ret(Some(unEx exp))
-    Canon.traceSchedule(Canon.basicBlock(Canon.linearize stm))
+    match ty with
+    | Types.Void -> Seq(unNx exp, Ret(None))
+    | _ -> Ret(Some(unEx exp))
