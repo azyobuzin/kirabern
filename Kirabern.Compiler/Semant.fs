@@ -64,8 +64,8 @@ let rec getty (tenv: TEnv) tyid =
     | ArrayTyId(x) -> Types.Array(getty tenv x)
 
 let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: IR.Level) breakLabel =
-    let rec trexp exp =
-        match exp with
+    let rec trexp =
+        function
         | VarExp(var) -> trvar var
 
         | NullExp -> { exp = Translate.nullExp; ty = Types.Null }
@@ -213,8 +213,8 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: IR.Level) breakLabel 
 
         | VoidExp | ErrExp -> voidExpTy
 
-    and trvar var =
-        match var with
+    and trvar =
+        function
         | SimpleVar(name, pos) ->
             match venv.TryFind(name) with
             | Some(VarEntry x) -> { exp = Translate.simpleVar x.access; ty = actualTy x.ty }

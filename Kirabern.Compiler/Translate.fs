@@ -7,14 +7,14 @@ type Exp =
     | Nx of IR.Stm
     | Cx of (Label * Label -> IR.Stm)
 
-let rec seq stms =
-    match stms with
+let rec seq =
+    function
     | [] -> invalidArg "stms" "empty"
     | [x] -> x
     | x :: xs -> Seq(x, seq xs)
 
-let unEx exp =
-    match exp with
+let unEx =
+    function
     | Ex(x) -> x
     | Nx(_) -> failwith "Nx -> Ex"
     | Cx(x) ->
@@ -25,14 +25,14 @@ let unEx exp =
                    Store(Var r, Const 0)
                    MarkLabel(t) ], Var r)
 
-let unNx exp =
-    match exp with
+let unNx =
+    function
     | Ex(x) -> ExpStm(x)
     | Nx(x) -> x
     | Cx(_) -> failwith "Cx -> Nx"
 
-let unCx exp =
-    match exp with
+let unCx =
+    function
     | Ex(Const 0) -> fun (t, f) -> Jump(f)
     | Ex(Const 1) -> fun (t, f) -> Jump(t)
     | Ex(x) -> fun (t, f) -> CJump(Ne, x, Const 0, t, f)

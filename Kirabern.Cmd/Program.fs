@@ -1,7 +1,6 @@
 ﻿open System
 open System.IO
 open System.Reflection
-open System.Reflection.Emit
 open Microsoft.FSharp.Text.Lexing
 open Kirabern.Compiler
 
@@ -9,8 +8,7 @@ let usage () =
     printfn @"Kirabern Compiler %O
 
 Usage:
-kirabern compile sourceFile [outFile]
-kirabern run sourceFile"
+kirabern sourceFile [outFile]"
         (Assembly.GetExecutingAssembly().GetName().Version)
 
 let lexbuf file =
@@ -26,20 +24,12 @@ let compile sourceFile outFile =
 let main argv =
     try
         match argv with
-        | [| "compile"; sourceFile |] ->
+        | [| sourceFile |] ->
             let outFile = Path.ChangeExtension(Path.GetFileName(sourceFile), ".exe")
             compile sourceFile outFile
             0
-        | [| "compile"; sourceFile; outFile |] ->
+        | [| sourceFile; outFile |] ->
             compile sourceFile outFile
-            0
-        | [| "run"; sourceFile |] ->
-            let asm = Main.compile (lexbuf sourceFile) (Path.GetFileName(sourceFile)) "Program" "Program"
-            let dm = DynamicMethod("Run", typeof<Void>, null, asm.ManifestModule)
-            let il = dm.GetILGenerator()
-            il.EmitCall(OpCodes.Call, asm.EntryPoint, null)
-            il.Emit(OpCodes.Ret)
-            (dm.CreateDelegate(typeof<Action>) :?> Action).Invoke()
             0
         | _ ->
             usage()

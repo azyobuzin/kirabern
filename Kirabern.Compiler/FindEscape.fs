@@ -13,8 +13,8 @@ let rec traverseVar (env: EscEnv) d s =
     | FieldVar((var, _), _) | SubscriptVar((var, _), _) -> traverseVar env d var
 
 and traverseExp (env: EscEnv) d =
-    let rec trexp s =
-        match s with
+    let rec trexp =
+        function
         | VarExp(var) -> traverseVar env d var
         | NullExp -> ()
         | IntExp(_) -> ()
