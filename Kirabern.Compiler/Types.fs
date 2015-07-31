@@ -1,10 +1,6 @@
 ﻿module Kirabern.Compiler.Types
 open System
 
-type unique = unit ref
-
-let newUnique () : unique = ref ()
-
 type Ty = 
     | Null
     | Int

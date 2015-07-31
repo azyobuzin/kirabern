@@ -1,19 +1,18 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>ae3f9b94-486c-4b06-b75d-80aae641d35d</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <RootNamespace>Kiraburn.Compiler</RootNamespace>
-    <AssemblyName>Kirabern.Compiler</AssemblyName>
+    <ProjectGuid>14d423a1-c783-4566-83d0-41bba0d759b3</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Kirabern.Cmd</RootNamespace>
+    <AssemblyName>kirabern</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <TargetFSharpCoreVersion>4.4.0.0</TargetFSharpCoreVersion>
-    <Name>Kirabern.Compiler</Name>
-    <NuGetPackageImportStamp>d3f2261b</NuGetPackageImportStamp>
-    <TargetFrameworkProfile />
+    <Name>Kirabern.Cmd</Name>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -23,11 +22,10 @@
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Debug\Kiraburn.Compiler.XML</DocumentationFile>
-    <StartAction>Program</StartAction>
-    <StartProgram>C:\Program Files (x86)\Microsoft SDKs\F#\4.0\Framework\v4.0\Fsi.exe</StartProgram>
-    <StartWorkingDirectory>C:\Users\azyobuzin\Documents\Visual Studio 2013\Projects\Kirabern\Kirabern.Compiler\</StartWorkingDirectory>
-    <StartArguments>SemantTest.fsx ..\samples\fibonacci.kb</StartArguments>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DocumentationFile>bin\Debug\Kirabern.Cmd.XML</DocumentationFile>
+    <Prefer32Bit>true</Prefer32Bit>
+    <StartArguments>compile ..\..\..\samples\fibonacci.kb</StartArguments>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -36,7 +34,9 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Release\Kiraburn.Compiler.XML</DocumentationFile>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DocumentationFile>bin\Release\Kirabern.Cmd.XML</DocumentationFile>
+    <Prefer32Bit>true</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
@@ -54,39 +54,11 @@
     </Otherwise>
   </Choose>
   <Import Project="$(FSharpTargetsPath)" />
-  <Import Project="..\packages\FsLexYacc.6.1.0\build\FsLexYacc.targets" Condition="Exists('..\packages\FsLexYacc.6.1.0\build\FsLexYacc.targets')" />
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('..\packages\FsLexYacc.6.1.0\build\FsLexYacc.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\FsLexYacc.6.1.0\build\FsLexYacc.targets'))" />
-  </Target>
   <ItemGroup>
-    <Compile Include="Absyn.fs" />
-    <FsYacc Include="Parser.fsy">
-      <OtherFlags>--module Kirabern.Compiler.Parser -v</OtherFlags>
-    </FsYacc>
-    <Compile Include="Parser.fs" />
-    <FsLex Include="Lexer.fsl">
-      <OtherFlags>--unicode</OtherFlags>
-    </FsLex>
-    <Compile Include="Lexer.fs" />
-    <Compile Include="FindEscape.fs" />
-    <Compile Include="Types.fs" />
-    <Compile Include="Unique.fs" />
-    <Compile Include="IR.fs" />
-    <Compile Include="Canon.fs" />
-    <Compile Include="Translate.fs" />
-    <Compile Include="Env.fs" />
-    <Compile Include="Semant.fs" />
-    <Compile Include="Emit.fs" />
-    <Compile Include="Main.fs" />
-    <Content Include="app.config" />
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Program.fs" />
+    <None Include="App.config" />
     <Content Include="packages.config" />
-    <None Include="TestUtils.fsx" />
-    <None Include="LexerTest.fsx" />
-    <None Include="ParserTest.fsx" />
-    <None Include="SemantTest.fsx" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FsLexYacc.Runtime">
@@ -100,8 +72,13 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
+    <ProjectReference Include="..\Kirabern.Compiler\Kirabern.Compiler.fsproj">
+      <Name>Kirabern.Compiler</Name>
+      <Project>{ae3f9b94-486c-4b06-b75d-80aae641d35d}</Project>
+      <Private>True</Private>
+    </ProjectReference>
   </ItemGroup>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
   </Target>

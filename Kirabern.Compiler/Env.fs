@@ -8,13 +8,13 @@ type Entry =
     | VarEntry of VarEntryInfo
     | FunEntry of FunEntryInfo
 
-let baseTEnv = 
+let baseTEnv =
     Map.ofArray [| "int", Types.Int
                    "string", Types.String |]
 
-let baseVEnv (topLevel: Level) = 
+let baseVEnv =
     let entry name methodInfo args result = 
-        let l = topLevel.CreateChild("$" + name, result)
+        let l = Level("$" + name, result, None)
         let exps = args |> List.map (fun (name, ty) -> Var(l.AddParameter(name, ty, false)))
         l.Body <- match result with
                   | Types.Void -> 
@@ -27,13 +27,13 @@ let baseVEnv (topLevel: Level) =
                    result = result }
     
     let notEntry = 
-        let l = topLevel.CreateChild("$not", Types.Int)
+        let l = Level("$not", Types.Int, None)
         let var = Var(l.AddParameter("value", Types.Int, false))
         let t, f = newLabel(), newLabel()
         l.Body <- [ CJump(Eq, var, Const 0, t, f)
-                    Label f
+                    MarkLabel f
                     Ret(Some(Const 0))
-                    Label t
+                    MarkLabel t
                     Ret(Some(Const 1)) ]
         "not", 
         FunEntry { level = l

@@ -78,12 +78,12 @@ let basicBlock stms =
     let finish = newLabel()
     let rec blocks stms blist =
         match stms with
-        | (Label(_) as head) :: tail ->
+        | (MarkLabel(_) as head) :: tail ->
             let rec next xs thisblock =
                 match xs with
                 | (Jump(_) as s) :: rest -> endblock rest (s :: thisblock)
                 | (CJump(_) as s) :: rest -> endblock rest (s :: thisblock)
-                | (Label(lab) :: _) as stms -> next (Jump(lab) :: stms) thisblock
+                | (MarkLabel(lab) :: _) as stms -> next (Jump(lab) :: stms) thisblock
                 | s :: rest -> next rest (s :: thisblock)
                 | [] -> next [Jump(finish)] thisblock
 
@@ -91,12 +91,12 @@ let basicBlock stms =
 
             next tail [head]
         | [] -> List.rev blist
-        | stms -> blocks (Label(newLabel()) :: stms) blist
+        | stms -> blocks (MarkLabel(newLabel()) :: stms) blist
     blocks stms [], finish
 
 let private enterblock b (table: Map<Label, Stm list>) =
     match b with
-    | Label(s) :: _ -> table.Add(s, b)
+    | MarkLabel(s) :: _ -> table.Add(s, b)
     | _ -> table
 
 let rec private splitlast xs =
@@ -108,7 +108,7 @@ let rec private splitlast xs =
 
 let rec private trace (table: Map<Label, Stm list>) b rest =
     match b with
-    | Label(lab) :: _ ->
+    | MarkLabel(lab) :: _ ->
         let table = table.Add(lab, [])
         match splitlast b with
         | most, Jump(lab) ->
@@ -122,18 +122,17 @@ let rec private trace (table: Map<Label, Stm list>) b rest =
                 most @ [CJump(notRel opr, x, y, f, t)] @ trace table b' rest
             | _ ->
                 let f' = newLabel()
-                most @ [CJump(opr, x, y, t, f'); Label(f'); Jump(f)] @ getnext table rest
-//      | most, Jump(_) -> b @ getnext table rest
+                most @ [CJump(opr, x, y, t, f'); MarkLabel(f'); Jump(f)] @ getnext table rest
         | _ -> failwith "does not end with Jump"
     | _ -> failwith "does not start with Label"
 
 and getnext table b =
     match b with
-    | ((Label(lab) :: _) as b) :: rest ->
+    | ((MarkLabel(lab) :: _) as b) :: rest ->
         match table.TryFind(lab) with
         | Some(_ :: _) -> trace table b rest
         | _ -> getnext table rest
     | [] -> []
 
 let traceSchedule (blocks, finish) =
-    getnext (List.foldBack enterblock blocks Map.empty) blocks @ [Label(finish)]
+    getnext (List.foldBack enterblock blocks Map.empty) blocks @ [MarkLabel(finish)]

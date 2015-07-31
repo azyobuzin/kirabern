@@ -1,4 +1,5 @@
 ﻿module Kirabern.Compiler.IR
+open Unique
 
 type Exp =
     | Const of int
@@ -23,7 +24,7 @@ and Stm =
     | Jump of Label
     | CJump of RelOp * Exp * Exp * Label * Label
     | Seq of Stm * Stm
-    | Label of Label
+    | MarkLabel of Label
     | Nop
     | Ret of Exp option
 
@@ -36,9 +37,9 @@ and RelOp =
     | ULt | ULe | UGt | UGe
 
 and Variable =
-    | NamedVariable of Level * string * Types.Ty * unit ref
+    | NamedVariable of Level * string * Types.Ty * UniqueId
     | EscapedNamedVariable of Level * string * Types.Ty
-    | TempVariable of Types.Ty * unit ref
+    | TempVariable of Types.Ty * UniqueId
     | ParameterVaribale of Level * int * Types.Ty
     | EscapedParameterVariable of Level * int * Types.Ty
 
@@ -56,31 +57,28 @@ and Level(name: string, returnType: Types.Ty, parent: Level option) =
         Level(name, returnType, Some(this))
     member this.CreateVar (name, ty, escape) =
         if escape then
-            needsEscapeClass <- true
             let n = varNum
             varNum <- n + 1
             EscapedNamedVariable(this, sprintf "%s@%d" name n, ty)
         else
-            NamedVariable(this, name, ty, ref ())
+            NamedVariable(this, name, ty, uniqueId())
     member this.AddParameter (name, ty, escape) =
         let index = parameters.Count
         parameters.Add((name, ty, escape))
         if escape then
-            needsEscapeClass <- true
             EscapedParameterVariable(this, index, ty)
         else
             ParameterVaribale(this, index, ty)
     member val Body = [] : Stm list with get, set
     override this.ToString() = sprintf "Level '%s'" name
 
-and Label = unit ref
+and Label = UniqueId
 
-let newTopLevel () = Level("Main", Types.Void, None)
-let dummyLevel = Level("Dummy", Types.Void, None)
+let newTopLevel name = Level(name, Types.Void, None)
 
-let newTemp ty = TempVariable(ty, ref ())
+let newTemp ty = TempVariable(ty, uniqueId())
 
-let newLabel () : Label = ref ()
+let newLabel () : Label = uniqueId()
 
 let getVarTy =
     function

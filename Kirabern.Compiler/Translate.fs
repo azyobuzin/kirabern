@@ -21,9 +21,9 @@ let unEx exp =
         let r, t, f = newTemp Types.Int, newLabel(), newLabel()
         ESeq(seq [ Store(Var r, Const 1)
                    x (t, f)
-                   Label(f)
+                   MarkLabel(f)
                    Store(Var r, Const 0)
-                   Label(t) ], Var r)
+                   MarkLabel(t) ], Var r)
 
 let unNx exp =
     match exp with
@@ -85,41 +85,41 @@ let ifThen test then' =
     let t, f = newLabel(), newLabel()
     Nx(seq [
         (unCx test)(t, f)
-        Label t
+        MarkLabel t
         unNx then'
-        Label f ])
+        MarkLabel f ])
 
 let ifElseVoid test then' else' =
     let t, f, finish = newLabel(), newLabel(), newLabel()
     Nx(seq [
         (unCx test)(t, f)
-        Label t
+        MarkLabel t
         unNx then'
         Jump finish
-        Label f
+        MarkLabel f
         unNx else'
-        Label finish ])
+        MarkLabel finish ])
 
 let ifElseExp test then' else' ty =
     let tmp = newTemp ty
     let t, f, finish = newLabel(), newLabel(), newLabel()
     Ex(ESeq(seq [ (unCx test) (t, f)
-                  Label t
+                  MarkLabel t
                   Store(Var tmp, unEx then')
                   Jump finish
-                  Label f
+                  MarkLabel f
                   Store(Var tmp, unEx else')
-                  Label finish ], Var tmp))
+                  MarkLabel finish ], Var tmp))
 
 let whileExp test body breakLabel =
     let start, bodyLabel = newLabel(), newLabel()
     Nx(seq [
-        Label start
+        MarkLabel start
         (unCx test)(bodyLabel, breakLabel)
-        Label bodyLabel
+        MarkLabel bodyLabel
         unNx body
         Jump start
-        Label breakLabel ])
+        MarkLabel breakLabel ])
 
 let forExp var lo hi body breakLabel =
     let start, bodyLabel, incLabel = newLabel(), newLabel(), newLabel()
@@ -129,15 +129,15 @@ let forExp var lo hi body breakLabel =
         | Ex(Const(_) as x) | Ex(Var(_) as x) -> x, []
         | _ -> Var hiTmp, [Store(Var hiTmp, unEx hi)]
     let header = Store(Var var, unEx lo) :: hiInit
-    Nx(seq (header @ [ Label start
+    Nx(seq (header @ [ MarkLabel start
                        CJump(Le, Var var, hiExp, bodyLabel, breakLabel)
-                       Label bodyLabel
+                       MarkLabel bodyLabel
                        unNx body
                        CJump(Lt, Var var, hiExp, incLabel, breakLabel)
-                       Label incLabel
+                       MarkLabel incLabel
                        Store(Var var, BinOpExp(Plus, Var var, Const 1))
                        Jump bodyLabel
-                       Label breakLabel ]))
+                       MarkLabel breakLabel ]))
 
 let breakExp label = Nx(Jump label)
 

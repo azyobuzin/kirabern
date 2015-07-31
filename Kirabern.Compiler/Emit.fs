@@ -4,15 +4,17 @@ open System.Reflection
 open System.Reflection.Emit
 open IR
 
-type Universe(moduleBuilder: ModuleBuilder) = 
+type Universe(moduleBuilder: ModuleBuilder, topClass: TypeBuilder) = 
     let classes = Collections.Generic.List<TypeBuilder>()
     let createdRecords = Collections.Generic.Dictionary<Types.RecordInfo, Type>()
     let parentFieldTable = Collections.Generic.Dictionary<Level, FieldInfo>()
     let escapeClassTable = Collections.Generic.Dictionary<Level, Type>()
+    let emitterTable = Collections.Generic.Dictionary<Level, FunctionEmitter>()
 
     member this.ModuleBuilder = moduleBuilder
     member this.ParentFieldTable = parentFieldTable
     member this.EscapeClassTable = escapeClassTable
+    member this.EmitterTable = emitterTable
     
     member this.ReflectionType(ty) = 
         match Types.actualTy ty with
@@ -27,7 +29,7 @@ type Universe(moduleBuilder: ModuleBuilder) =
     member this.GetOrCreateRecordType(info: Types.RecordInfo) =
         let mutable ret = null
         if not(createdRecords.TryGetValue(info, &ret)) then
-            let t = moduleBuilder.DefineType(info.Name, TypeAttributes.NotPublic &&& TypeAttributes.Sealed &&& TypeAttributes.Class)
+            let t = moduleBuilder.DefineType(info.Name, TypeAttributes.NotPublic ||| TypeAttributes.Sealed ||| TypeAttributes.Class)
             for (name, ty) in info.Fields do
                 t.DefineField(name, this.ReflectionType(ty), FieldAttributes.Public) |> ignore
             ret <- t.CreateType()
@@ -40,19 +42,27 @@ type Universe(moduleBuilder: ModuleBuilder) =
         for c in classes do
             c.CreateType() |> ignore
         classes.Clear()
+
+    member this.EmitStaticFunction (level: Level) =
+        if level.Parent.IsSome then invalidArg "level" "level has a parent"
+        let e = FunctionEmitter(this, level, topClass)
+        e.Emit()
+        e.MethodBuilder
     
-type FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) =
+and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as this =
+    do univ.EmitterTable.Add(level, this)
+
     let isStatic = level.Parent.IsNone
     let escapeClass, escapeClassCtor, paramVars =
         if level.NeedsEscapeClass then
-            let t = univ.ModuleBuilder.DefineType(level.Name, TypeAttributes.NotPublic &&& TypeAttributes.Sealed &&& TypeAttributes.Class)
+            let t = univ.ModuleBuilder.DefineType(level.Name, TypeAttributes.NotPublic ||| TypeAttributes.Sealed ||| TypeAttributes.Class)
             univ.AddClass(t)
             univ.EscapeClassTable.Add(level, t)
 
             let ctor =
                 if not isStatic then
                     let parentType = univ.EscapeClassTable.[level.Parent.Value]
-                    let fld = t.DefineField("$parent$", parentType, FieldAttributes.Assembly &&& FieldAttributes.InitOnly)
+                    let fld = t.DefineField("$parent$", parentType, FieldAttributes.Assembly ||| FieldAttributes.InitOnly)
                     univ.ParentFieldTable.Add(level, fld)
                     let ctor = t.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard, [| parentType |])
                     let ctorIl = ctor.GetILGenerator()
@@ -77,45 +87,41 @@ type FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) =
                     | None -> None)
                 |> Map.ofSeq
 
-            (*il.Emit(OpCodes.Ldloc, v)
-            ldarg i
-            il.Emit(OpCodes.Stfld, f))*)
-            
-
-            (*if not isStatic then
-                il.Emit(OpCodes.Ldarg_0)
-            il.Emit(OpCodes.Newobj, ctor)
-            let v = il.DeclareLocal(t)
-            il.Emit(OpCodes.Stloc, v)
-
-            level.Parameters |> Seq.iteri (fun i (_, ty, escape) ->
-                if escape then
-                    let f = t.DefineField(sprintf "$arg%d$" i, univ.ReflectionType(ty), FieldAttributes.Assembly)
-                    il.Emit(OpCodes.Ldloc, v)
-                    ldarg i
-                    il.Emit(OpCodes.Stfld, f))*)
-
             Some(t), Some(ctor), paramVars
         else
             None, None, Map.empty
 
-    member this.GetVariableField(var) =
-        raise (NotImplementedException())
+    
+    let escapedVarTable = Collections.Generic.Dictionary<string, FieldBuilder>()
 
-    member this.Emit() =
-        let isStatic = level.Parent.IsNone
+    let methodBuilder =
         let baseMethodAttr = MethodAttributes.Assembly        
         let methodAttr = 
-            if isStatic then baseMethodAttr &&& MethodAttributes.Static
-            else baseMethodAttr &&& MethodAttributes.Final        
-        let methodBuilder = 
+            if isStatic then baseMethodAttr ||| MethodAttributes.Static
+            else baseMethodAttr ||| MethodAttributes.Final ||| MethodAttributes.Virtual
+        let m =
             container.DefineMethod(level.Name, methodAttr, univ.ReflectionType(level.ReturnType), 
-                                   level.Parameters
-                                   |> Seq.map (fun (_, ty, _) -> univ.ReflectionType(ty))
-                                   |> Seq.toArray)        
+                level.Parameters
+                |> Seq.map (fun (_, ty, _) -> univ.ReflectionType(ty))
+                |> Seq.toArray)
         level.Parameters |> Seq.iteri (fun i (name, _, _) ->
-            methodBuilder.DefineParameter(i, ParameterAttributes.None, name) |> ignore)
+            m.DefineParameter(i, ParameterAttributes.None, name) |> ignore)
+        m
 
+    member this.MethodBuilder = methodBuilder
+
+    member this.GetVariableField var =
+        match var with
+        | EscapedNamedVariable(_, name, ty) ->
+            let mutable ret = null
+            if not(escapedVarTable.TryGetValue(name, &ret)) then
+                ret <- escapeClass.Value.DefineField(name, univ.ReflectionType(ty), FieldAttributes.Assembly)
+                escapedVarTable.Add(name, ret)
+            ret
+        | EscapedParameterVariable(_, i, _) -> paramVars.[i]
+        | _ -> invalidArg "var" "not an escaped var"
+
+    member this.Emit() =
         let il = methodBuilder.GetILGenerator()
         let localTable = Collections.Generic.Dictionary<Variable, LocalBuilder>()
         let labelTable = Collections.Generic.Dictionary<Label, Emit.Label>()
@@ -127,7 +133,7 @@ type FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) =
                 match var with
                 | NamedVariable(_, name, _, _) -> ret.SetLocalSymInfo(name)
                 | TempVariable(_) -> ()
-                | _ -> failwith "not a local"
+                | _ -> invalidArg "var" "not a local"
                 localTable.Add(var, ret)
             ret
 
@@ -138,53 +144,65 @@ type FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) =
                 labelTable.Add(l, ret)
             ret
 
-        let ldarg i =
-            let i = if isStatic then i else i + 1
-            match i with
+        let ldarg idx =
+            match if isStatic then idx else idx + 1 with
             | 0 -> il.Emit(OpCodes.Ldarg_0)
             | 1 -> il.Emit(OpCodes.Ldarg_1)
             | 2 -> il.Emit(OpCodes.Ldarg_2)
             | 3 -> il.Emit(OpCodes.Ldarg_3)
-            | _ when i <= 255 -> il.Emit(OpCodes.Ldarg_S, byte i)
-            | _ -> il.Emit(OpCodes.Ldarg, int16 i)
+            | x when x <= 255 -> il.Emit(OpCodes.Ldarg_S, byte x)
+            | x -> il.Emit(OpCodes.Ldarg, int16 x)
 
-        let escapeData =
-            if level.NeedsEscapeClass then
-                let t = univ.ModuleBuilder.DefineType(level.Name, TypeAttributes.NotPublic &&& TypeAttributes.Sealed &&& TypeAttributes.Class)
-                univ.AddClass(t)
-                univ.EscapeClassTable.Add(level, t)
-
-                let ctor =
-                    if not isStatic then
-                        let parentType = univ.EscapeClassTable.[level.Parent.Value]
-                        let fld = t.DefineField("$parent$", parentType, FieldAttributes.Assembly &&& FieldAttributes.InitOnly)
-                        univ.ParentFieldTable.Add(level, fld)
-                        let ctor = t.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard, [| parentType |])
-                        let ctorIl = ctor.GetILGenerator()
-                        ctorIl.Emit(OpCodes.Ldarg_0)
-                        ctorIl.Emit(OpCodes.Callvirt, typeof<obj>.GetConstructor(Type.EmptyTypes))
-                        ctorIl.Emit(OpCodes.Ldarg_0)
-                        ctorIl.Emit(OpCodes.Ldarg_1)
-                        ctorIl.Emit(OpCodes.Stfld, fld)
-                        ctorIl.Emit(OpCodes.Ret)
-                        ctor
-                    else t.DefineDefaultConstructor(MethodAttributes.Assembly)
-
+        let escapeClassLocal =
+            match escapeClass, escapeClassCtor with
+            | Some(t), Some(ctor) ->
+                let l = il.DeclareLocal(t)
                 if not isStatic then
                     il.Emit(OpCodes.Ldarg_0)
                 il.Emit(OpCodes.Newobj, ctor)
-                let v = il.DeclareLocal(t)
-                il.Emit(OpCodes.Stloc, v)
+                level.Parameters
+                |> Seq.mapi (fun i (_, _, escape) -> i, escape)
+                |> Seq.choose(function
+                              | (i, true) -> Some(i)
+                              | _ -> None)
+                |> Seq.iter (fun i ->
+                    il.Emit(OpCodes.Dup)
+                    ldarg i
+                    il.Emit(OpCodes.Stfld, paramVars.[i]))
+                il.Emit(OpCodes.Stloc, l)
+                        
+                Some(l)
+            | _ -> None
 
-                level.Parameters |> Seq.iteri (fun i (_, ty, escape) ->
-                    if escape then
-                        let f = t.DefineField(sprintf "$arg%d$" i, univ.ReflectionType(ty), FieldAttributes.Assembly)
-                        il.Emit(OpCodes.Ldloc, v)
-                        ldarg i
-                        il.Emit(OpCodes.Stfld, f))
+        let emitParent (target: Level) =
+            if target = level then
+                il.Emit(OpCodes.Ldloc, escapeClassLocal.Value)
+            else
+                il.Emit(OpCodes.Ldarg_0)
+                if level.Parent.Value <> target then
+                    let rec f x =
+                        il.Emit(OpCodes.Ldfld, univ.ParentFieldTable.[x])
+                        let p = x.Parent.Value
+                        if p <> target then f p
+                    f level.Parent.Value
 
-                Some(t, v)
-            else None
+        let varField var =            
+            match var with
+            | EscapedNamedVariable(l, _, _) | EscapedParameterVariable(l, _, _) ->
+                univ.EmitterTable.[l].GetVariableField(var)
+            | _ -> invalidArg "var" "not an escaped var"
+
+        let methodInfo (l: Level) =
+            let mutable emitter = Unchecked.defaultof<FunctionEmitter>
+            if not(univ.EmitterTable.TryGetValue(l, &emitter)) then
+                if l.Parent.IsSome then
+                    emitter <- FunctionEmitter(univ, l, escapeClass.Value)
+                    emitter.Emit()
+                    emitter.MethodBuilder
+                else
+                    univ.EmitStaticFunction(l)
+            else
+                emitter.MethodBuilder
 
         let rec emitExp =
             function
@@ -230,6 +248,9 @@ type FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) =
                 match x with
                 | NamedVariable(_) | TempVariable(_) -> il.Emit(OpCodes.Ldloc, getLocal x)
                 | ParameterVaribale(_, i, _) -> ldarg i
+                | EscapedNamedVariable(l, _, _) | EscapedParameterVariable(l, _, _) ->
+                    emitParent l
+                    il.Emit(OpCodes.Ldfld, varField x)
             | Field(x, record, field) ->
                 emitExp x
                 il.Emit(OpCodes.Ldfld, univ.GetOrCreateRecordType(record).GetField(field))
@@ -241,24 +262,48 @@ type FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) =
                     | Types.Array(Types.Int) -> OpCodes.Ldelem_I4
                     | Types.Array(_) -> OpCodes.Ldelem_Ref
                     | _ -> failwith "ldelem: not an array")
-            | CallExp(_, _) -> failwith "Not implemented yet"
-            | CallStaticMethodExp(m, args, _) ->
-                List.iter emitExp args
-                il.EmitCall(OpCodes.Call, m, null)
+            | CallExp(l, args) -> callFunc l args
+            | CallStaticMethodExp(m, args, _) -> callStaticMethod m args
             | ESeq(x, y) ->
                 emitStm x
                 emitExp y
 
         and emitStm =
             function
-            | Store(left, right) -> failwith "Not implemented yet"
+            | Store(left, right) ->
+                match left with
+                | Var(x) ->
+                    match x with
+                    | NamedVariable(_) | TempVariable(_) ->
+                        emitExp right
+                        il.Emit(OpCodes.Stloc, getLocal x)
+                    | ParameterVaribale(_, i, _) ->
+                        emitExp right
+                        if i <= 255 then il.Emit(OpCodes.Starg_S, byte i)
+                        else il.Emit(OpCodes.Starg, int16 i)
+                    | EscapedNamedVariable(l, _, _) | EscapedParameterVariable(l, _, _) ->
+                        emitParent l
+                        emitExp right
+                        il.Emit(OpCodes.Stfld, varField x)
+                | Field(x, record, field) ->
+                    emitExp x
+                    emitExp right
+                    il.Emit(OpCodes.Stfld, univ.GetOrCreateRecordType(record).GetField(field))
+                | ArrayElem(arr, idx) ->
+                    emitExp arr
+                    emitExp idx
+                    emitExp right
+                    il.Emit(
+                        match Types.actualTy(getExpTy arr) with
+                        | Types.Array(Types.Int) -> OpCodes.Stelem_I4
+                        | Types.Array(_) -> OpCodes.Stelem_Ref
+                        | _ -> failwith "stelem: not an array")
+                | _ -> failwith "invalid left"
             | ExpStm(x) ->
                 emitExp x
                 il.Emit(OpCodes.Pop)
-            | CallStm(_, _) -> failwith "Not implemented yet"
-            | CallStaticMethodStm(m, args) ->
-                List.iter emitExp args
-                il.EmitCall(OpCodes.Call, m, null)
+            | CallStm(l, args) -> callFunc l args
+            | CallStaticMethodStm(m, args) -> callStaticMethod m args
             | Jump(x) -> il.Emit(OpCodes.Br, getLabel x)
             | CJump(op, left, right, t, f) ->
                 emitExp left
@@ -283,11 +328,22 @@ type FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) =
             | Seq(x, y) ->
                 emitStm x
                 emitStm y
-            | Label(x) ->
+            | MarkLabel(x) ->
                 il.MarkLabel(getLabel x)
             | Nop -> ()
             | Ret(x) ->
                 match x with | Some(y) -> emitExp y | None -> ()
                 il.Emit(OpCodes.Ret)
+
+        and callFunc l args =
+            match l.Parent with
+            | Some(x) -> emitParent x
+            | None -> ()
+            List.iter emitExp args
+            il.EmitCall((if l.Parent.IsSome then OpCodes.Callvirt else OpCodes.Call), methodInfo l, null)
+
+        and callStaticMethod m args =
+            List.iter emitExp args
+            il.EmitCall(OpCodes.Call, m, null)
                 
         List.iter emitStm level.Body

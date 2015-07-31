@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio 14
+VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Kirabern.Compiler", "Kirabern.Compiler\Kirabern.Compiler.fsproj", "{AE3F9B94-486C-4B06-B75D-80AAE641D35D}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Kirabern.Cmd", "Kirabern.Cmd\Kirabern.Cmd.fsproj", "{14D423A1-C783-4566-83D0-41BBA0D759B3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{AE3F9B94-486C-4B06-B75D-80AAE641D35D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AE3F9B94-486C-4B06-B75D-80AAE641D35D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AE3F9B94-486C-4B06-B75D-80AAE641D35D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14D423A1-C783-4566-83D0-41BBA0D759B3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14D423A1-C783-4566-83D0-41BBA0D759B3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14D423A1-C783-4566-83D0-41BBA0D759B3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14D423A1-C783-4566-83D0-41BBA0D759B3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
