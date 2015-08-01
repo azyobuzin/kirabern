@@ -7,11 +7,13 @@ type Exp =
     | Null
     | BinOpExp of BinOp * Exp * Exp
     | Negate of Exp
+    | ConvI4 of Exp
     | NewRecord of Types.RecordInfo
     | NewArray of Types.Ty * Exp
     | Var of Variable
     | Field of Exp * Types.RecordInfo * string
     | ArrayElem of Exp * Exp
+    | ArrayLength of Exp
     | CallExp of Level * Exp list
     | CallStaticMethodExp of System.Reflection.MethodInfo * Exp list * Types.Ty
     | ESeq of Stm * Exp
@@ -95,6 +97,7 @@ let rec getExpTy =
     | Null -> Types.Null
     | BinOpExp(_) -> Types.Int
     | Negate(_) -> Types.Int
+    | ConvI4(_) -> Types.Int
     | NewRecord(x) -> Types.Record(x)
     | NewArray(x, _) -> Types.Array(x)
     | Var(x) -> getVarTy x
@@ -105,6 +108,7 @@ let rec getExpTy =
         match getExpTy x with
         | Types.Array(y) -> y
         | y -> failwith(sprintf "%O is not array" y)
+    | ArrayLength(_) -> Types.Int
     | CallExp(l, _) -> l.ReturnType
     | CallStaticMethodExp(_, _, x) -> x
     | ESeq(_, x) -> getExpTy x

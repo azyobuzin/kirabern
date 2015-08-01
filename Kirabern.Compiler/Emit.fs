@@ -23,6 +23,7 @@ type Universe(moduleBuilder: ModuleBuilder, topClass: TypeBuilder) =
         | Types.String -> typeof<string>
         | Types.Record(x) -> this.GetOrCreateRecordType(x)
         | Types.Array(x) -> this.ReflectionType(x).MakeArrayType()
+        | Types.ArrayType -> typeof<Array>
         | Types.Alias(_) -> failwith "unreachable"
         | Types.Void -> typeof<Void>
         
@@ -240,6 +241,9 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | Negate(x) ->
                 emitExp x
                 il.Emit(OpCodes.Neg)
+            | ConvI4(x) ->
+                emitExp x
+                il.Emit(OpCodes.Conv_I4)
             | NewRecord(x) -> il.Emit(OpCodes.Newobj, univ.GetOrCreateRecordType(x).GetConstructor(Type.EmptyTypes))
             | NewArray(ty, size) ->
                 emitExp size
@@ -262,6 +266,9 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                     | Types.Array(Types.Int) -> OpCodes.Ldelem_I4
                     | Types.Array(_) -> OpCodes.Ldelem_Ref
                     | _ -> failwith "ldelem: not an array")
+            | ArrayLength(x) ->
+                emitExp x
+                il.Emit(OpCodes.Ldlen)
             | CallExp(l, args) -> callFunc l args
             | CallStaticMethodExp(m, args, _) -> callStaticMethod m args
             | ESeq(x, y) ->

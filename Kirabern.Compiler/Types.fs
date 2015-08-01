@@ -7,6 +7,7 @@ type Ty =
     | String
     | Record of RecordInfo
     | Array of Ty
+    | ArrayType
     | Alias of string * Ty option ref
     | Void    
     override x.ToString() =
@@ -17,6 +18,7 @@ type Ty =
         | Record(x) -> 
             sprintf "{ %s }" (String.Join(", ", x.Fields |> Seq.map (fun (n, ty) -> sprintf "%s: %O" n ty)))
         | Array(ty) -> sprintf "%O[]" ty
+        | ArrayType -> "Array"
         | Alias(n, _) -> n
         | Void -> "void"
 

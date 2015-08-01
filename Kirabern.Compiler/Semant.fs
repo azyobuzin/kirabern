@@ -51,6 +51,14 @@ let cmpTy x y =
             match y with
             | Types.Record(_) -> true
             | _ -> false
+        | Types.Array(_) ->
+            match y with
+            | Types.ArrayType -> true
+            | _ -> false
+        | Types.ArrayType ->
+            match y with
+            | Types.Array(_) -> true
+            | _ -> false
         | _ -> false
 
 let isInt = cmpTy Types.Int

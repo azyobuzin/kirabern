@@ -1,0 +1,21 @@
+// 100 まで Fizz Buzz
+var mulOfThree = 3;
+var mulOfFive = 5;
+for (i = 1 to 100) {
+    println(
+        if (i == mulOfThree && i == mulOfFive) {
+            mulOfThree = mulOfThree + 3;
+            mulOfFive = mulOfFive + 5;
+            "Fizz Buzz"
+        }
+        else if (i == mulOfThree) {
+            mulOfThree = mulOfThree + 3;
+            "Fizz"
+        }
+        else if (i == mulOfFive) {
+            mulOfFive = mulOfFive + 5;
+            "Buzz"
+        }
+        else intToString(i)
+    );
+};

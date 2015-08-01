@@ -37,6 +37,15 @@ let baseVEnv =
         FunEntry { level = l
                    formals = [ "value", Types.Int ]
                    result = Types.Int }
+
+    let lenEntry = 
+        let l = Level("$len", Types.Int, None)
+        let arg = Var(l.AddParameter("array", Types.ArrayType, false))
+        l.Body <- Ret(Some(ConvI4(ArrayLength(arg))))
+        "len", 
+        FunEntry { level = l
+                   formals = [ "array", Types.ArrayType ]
+                   result = Types.Int }
     
     Map.ofArray [| entry "print" (typeof<System.Console>.GetMethod("Write", [| typeof<string> |])) [ "value", Types.String ] Types.Void
                    entry "println" (typeof<System.Console>.GetMethod("WriteLine", [| typeof<string> |])) [ "value", Types.String ] Types.Void
@@ -44,4 +53,6 @@ let baseVEnv =
                    entry "parseInt" (typeof<int>.GetMethod("Parse", [| typeof<string> |])) [ "s", Types.String ] Types.Int
                    entry "intToString" (typeof<System.Convert>.GetMethod("ToString", [| typeof<int32> |])) [ "value", Types.Int ] Types.String
                    notEntry
+                   lenEntry
+                   entry "getArgs" (typeof<System.Environment>.GetMethod("GetCommandLineArgs")) [] (Types.Array(Types.String))
                    entry "exit" (typeof<System.Environment>.GetMethod("Exit")) [ "exitCode", Types.Int ] Types.Void |]
