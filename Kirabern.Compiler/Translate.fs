@@ -5,7 +5,6 @@ open IR
 type Exp =
     | Ex of IR.Exp
     | Nx of IR.Stm
-    | Cx of (Label * Label -> IR.Stm)
 
 let rec seq =
     function
@@ -17,35 +16,19 @@ let unEx =
     function
     | Ex(x) -> x
     | Nx(_) -> failwith "Nx -> Ex"
-    | Cx(x) ->
-        let r, t, f = newTemp Types.Int, newLabel(), newLabel()
-        ESeq(seq [ Store(Var r, Const 1)
-                   x (t, f)
-                   MarkLabel(f)
-                   Store(Var r, Const 0)
-                   MarkLabel(t) ], Var r)
 
 let unNx =
     function
-    | Ex(x) -> ExpStm(x)
+    | Ex(x) -> Pop(x)
     | Nx(x) -> x
-    | Cx(_) -> failwith "Cx -> Nx"
 
-let unCx =
-    function
-    | Ex(Const 0) -> fun (t, f) -> Jump(f)
-    | Ex(Const 1) -> fun (t, f) -> Jump(t)
-    | Ex(x) -> fun (t, f) -> CJump(Ne, x, Const 0, t, f)
-    | Nx(_) -> failwith "Nx -> Cx"
-    | Cx(x) -> x
+let nullExp = Ex(Ldnull)
 
-let nullExp = Ex(Null)
+let intExp i = Ex(LdcI4(i))
 
-let intExp i = Ex(Const(i))
+let negateExp exp = Ex(Neg(unEx exp))
 
-let negateExp exp = Ex(Negate(unEx exp))
-
-let stringExp s = Ex(StringLiteral(s))
+let stringExp s = Ex(Ldstr(s))
 
 let callExp (func: Level) args =
     match func.ReturnType with
@@ -55,19 +38,18 @@ let callExp (func: Level) args =
 
 let opExp oper left right =
     let left, right = unEx left, unEx right
-    let bin op = Ex(BinOpExp(op, left, right))
-    let rel op = Cx(fun (t, f) -> CJump(op, left, right, t, f))
-    match oper with
-    | Absyn.PlusOp -> bin Plus
-    | Absyn.MinusOp -> bin Minus
-    | Absyn.TimesOp -> bin Mul
-    | Absyn.DivideOp -> bin Div
-    | Absyn.EqOp -> rel Eq
-    | Absyn.NeqOp -> rel Ne
-    | Absyn.LtOp -> rel Lt
-    | Absyn.LeOp -> rel Le
-    | Absyn.GtOp -> rel Gt
-    | Absyn.GeOp -> rel Ge
+    let not x = Ceq(x, LdcI4(0))
+    Ex(match oper with
+       | Absyn.PlusOp -> Add(left, right)
+       | Absyn.MinusOp -> Sub(left, right)
+       | Absyn.TimesOp -> Mul(left, right)
+       | Absyn.DivideOp -> Div(left, right)
+       | Absyn.EqOp -> Ceq(left, right)
+       | Absyn.NeqOp -> not(Ceq(left, right))
+       | Absyn.LtOp -> Clt(left, right)
+       | Absyn.LeOp -> not(Cgt(left, right))
+       | Absyn.GtOp -> Cgt(left, right)
+       | Absyn.GeOp -> not(Clt(left, right)))
 
 let recordExp record fields =
     let tmp = newTemp(Types.Record record)
@@ -82,64 +64,55 @@ let assignExp left right =
     Nx(Store(unEx left, unEx right))
 
 let ifThen test then' =
-    let t, f = newLabel(), newLabel()
-    Nx(seq [
-        (unCx test)(t, f)
-        MarkLabel t
-        unNx then'
-        MarkLabel f ])
+    let f = newLabel()
+    Nx(seq [ Brfalse(unEx test, f)
+             unNx then'
+             MarkLabel(f) ])
 
 let ifElseVoid test then' else' =
-    let t, f, finish = newLabel(), newLabel(), newLabel()
-    Nx(seq [
-        (unCx test)(t, f)
-        MarkLabel t
-        unNx then'
-        Jump finish
-        MarkLabel f
-        unNx else'
-        MarkLabel finish ])
+    let t, finish = newLabel(), newLabel()
+    Nx(seq [ Brtrue(unEx test, t)
+             unNx else'
+             Br(finish)
+             MarkLabel(t)
+             unNx then'
+             MarkLabel(finish) ])
 
-let ifElseExp test then' else' ty =
-    let tmp = newTemp ty
+let ifElseExp test then' else' =
     let t, f, finish = newLabel(), newLabel(), newLabel()
-    Ex(ESeq(seq [ (unCx test) (t, f)
-                  MarkLabel t
-                  Store(Var tmp, unEx then')
-                  Jump finish
-                  MarkLabel f
-                  Store(Var tmp, unEx else')
-                  MarkLabel finish ], Var tmp))
+    Ex(IfExp { test = Brtrue(unEx test, t)
+               thenExp = unEx then'
+               thenLabel = t
+               elseExp = unEx else'
+               elseLabel = f
+               endLabel = finish })
 
 let whileExp test body breakLabel =
-    let start, bodyLabel = newLabel(), newLabel()
-    Nx(seq [
-        MarkLabel start
-        (unCx test)(bodyLabel, breakLabel)
-        MarkLabel bodyLabel
-        unNx body
-        Jump start
-        MarkLabel breakLabel ])
+    let start = newLabel()
+    Nx(seq [ MarkLabel(start)
+             Brfalse(unEx test, breakLabel)
+             unNx body
+             Br(start)
+             MarkLabel(breakLabel) ])
 
 let forExp var lo hi body breakLabel =
     let start, bodyLabel, incLabel = newLabel(), newLabel(), newLabel()
     let hiTmp = newTemp Types.Int
     let hiExp, hiInit =
         match hi with
-        | Ex(Const(_) as x) | Ex(Var(_) as x) -> x, []
+        | Ex(LdcI4(_) as x) | Ex(Var(_) as x) -> x, []
         | _ -> Var hiTmp, [Store(Var hiTmp, unEx hi)]
-    let header = Store(Var var, unEx lo) :: hiInit
-    Nx(seq (header @ [ MarkLabel start
-                       CJump(Le, Var var, hiExp, bodyLabel, breakLabel)
-                       MarkLabel bodyLabel
+    let var = Var(var)
+    let header = Store(var, unEx lo) :: hiInit
+    Nx(seq (header @ [ Bgt(var, hiExp, breakLabel)
+                       MarkLabel(bodyLabel)
                        unNx body
-                       CJump(Lt, Var var, hiExp, incLabel, breakLabel)
-                       MarkLabel incLabel
-                       Store(Var var, BinOpExp(Plus, Var var, Const 1))
-                       Jump bodyLabel
-                       MarkLabel breakLabel ]))
+                       Bge(var, hiExp, breakLabel)
+                       Store(var, Add(var, LdcI4(1)))
+                       Br(bodyLabel)
+                       MarkLabel(breakLabel) ]))
 
-let breakExp label = Nx(Jump label)
+let breakExp label = Nx(Br label)
 
 let arrayExp ty size = Ex(NewArray(ty, unEx size))
 
@@ -149,7 +122,7 @@ let simpleVar var = Ex(Var var)
 
 let fieldVar exp record name = Ex(Field(unEx exp, record, name))
 
-let subscriptVar exp idx = Ex(ArrayElem(unEx exp, unEx idx))
+let subscriptVar exp idx = Ex(Ldelem(unEx exp, unEx idx))
 
 let seqVoid x xs = Nx(Seq(unNx x, unNx xs))
 

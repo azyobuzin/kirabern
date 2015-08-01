@@ -175,7 +175,7 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: IR.Level) breakLabel 
                 let exp =
                     match ty with
                     | Types.Void -> Translate.ifElseVoid test.exp then'.exp else'.exp
-                    | _ -> Translate.ifElseExp test.exp then'.exp else'.exp ty
+                    | _ -> Translate.ifElseExp test.exp then'.exp else'.exp
                 { exp = exp; ty = ty }
             | None -> { exp = Translate.ifThen test.exp then'.exp; ty = Types.Void }
 

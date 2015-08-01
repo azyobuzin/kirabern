@@ -207,7 +207,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
 
         let rec emitExp =
             function
-            | Const(x) ->
+            | LdcI4(x) ->
                 match x with
                 | 0 -> il.Emit(OpCodes.Ldc_I4_0)
                 | 1 -> il.Emit(OpCodes.Ldc_I4_1)
@@ -221,24 +221,16 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                 | -1 -> il.Emit(OpCodes.Ldc_I4_M1)
                 | _ when x >= -128 && x <= 127 -> il.Emit(OpCodes.Ldc_I4_S, sbyte x)
                 | _ -> il.Emit(OpCodes.Ldc_I4, x)
-            | StringLiteral(x) -> il.Emit(OpCodes.Ldstr, x)
-            | Null -> il.Emit(OpCodes.Ldnull)
-            | BinOpExp(op, left, right) ->
-                emitExp left
-                emitExp right
-                il.Emit(
-                    match op with
-                    | Plus -> OpCodes.Add
-                    | Minus -> OpCodes.Sub
-                    | Mul -> OpCodes.Mul
-                    | Div -> OpCodes.Div
-                    | And -> OpCodes.And
-                    | Or -> OpCodes.Or
-                    | LShift -> OpCodes.Shl
-                    | RShift -> OpCodes.Shr_Un
-                    | ArShift -> OpCodes.Shr
-                    | Xor -> OpCodes.Xor)
-            | Negate(x) ->
+            | Ldstr(x) -> il.Emit(OpCodes.Ldstr, x)
+            | Ldnull -> il.Emit(OpCodes.Ldnull)
+            | Ceq(x, y) -> binOp OpCodes.Ceq x y
+            | Cgt(x, y) -> binOp OpCodes.Cgt x y
+            | Clt(x, y) -> binOp OpCodes.Clt x y
+            | Add(x, y) -> binOp OpCodes.Add x y
+            | Sub(x, y) -> binOp OpCodes.Sub x y
+            | Mul(x, y) -> binOp OpCodes.Mul x y
+            | Div(x, y) -> binOp OpCodes.Div x y
+            | Neg(x) ->
                 emitExp x
                 il.Emit(OpCodes.Neg)
             | ConvI4(x) ->
@@ -258,7 +250,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | Field(x, record, field) ->
                 emitExp x
                 il.Emit(OpCodes.Ldfld, univ.GetOrCreateRecordType(record).GetField(field))
-            | ArrayElem(arr, idx) ->
+            | Ldelem(arr, idx) ->
                 emitExp arr
                 emitExp idx
                 il.Emit(
@@ -266,14 +258,27 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                     | Types.Array(Types.Int) -> OpCodes.Ldelem_I4
                     | Types.Array(_) -> OpCodes.Ldelem_Ref
                     | _ -> failwith "ldelem: not an array")
-            | ArrayLength(x) ->
+            | Ldlen(x) ->
                 emitExp x
                 il.Emit(OpCodes.Ldlen)
             | CallExp(l, args) -> callFunc l args
             | CallStaticMethodExp(m, args, _) -> callStaticMethod m args
+            | IfExp(x) ->
+                emitStm x.test
+                emitStm(MarkLabel(x.elseLabel))
+                emitExp x.elseExp
+                emitStm(Br(x.endLabel))
+                emitStm(MarkLabel(x.thenLabel))
+                emitExp x.thenExp
+                emitStm(MarkLabel(x.endLabel))
             | ESeq(x, y) ->
                 emitStm x
                 emitExp y
+
+        and binOp op left right =
+            emitExp left
+            emitExp right
+            il.Emit(op)
 
         and emitStm =
             function
@@ -296,7 +301,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                     emitExp x
                     emitExp right
                     il.Emit(OpCodes.Stfld, univ.GetOrCreateRecordType(record).GetField(field))
-                | ArrayElem(arr, idx) ->
+                | Ldelem(arr, idx) ->
                     emitExp arr
                     emitExp idx
                     emitExp right
@@ -306,32 +311,23 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                         | Types.Array(_) -> OpCodes.Stelem_Ref
                         | _ -> failwith "stelem: not an array")
                 | _ -> failwith "invalid left"
-            | ExpStm(x) ->
+            | Pop(x) ->
                 emitExp x
                 il.Emit(OpCodes.Pop)
             | CallStm(l, args) -> callFunc l args
             | CallStaticMethodStm(m, args) -> callStaticMethod m args
-            | Jump(x) -> il.Emit(OpCodes.Br, getLabel x)
-            | CJump(op, left, right, t, f) ->
-                emitExp left
-                emitExp right
-                let t, f = getLabel t, getLabel f
-                let j oc =
-                    il.Emit(oc, t)
-                    il.Emit(OpCodes.Br, f)
-                match op with
-                | Eq -> j OpCodes.Beq
-                | Ne ->
-                    il.Emit(OpCodes.Beq, f)
-                    il.Emit(OpCodes.Br, t)
-                | Lt -> j OpCodes.Blt
-                | Gt -> j OpCodes.Bgt
-                | Le -> j OpCodes.Ble
-                | Ge -> j OpCodes.Bge
-                | ULt -> j OpCodes.Blt_Un
-                | ULe -> j OpCodes.Ble_Un
-                | UGt -> j OpCodes.Bgt_Un
-                | UGe -> j OpCodes.Bge_Un
+            | Br(x) -> il.Emit(OpCodes.Br, getLabel x)
+            | Beq(x, y, l) -> brOp OpCodes.Beq x y l
+            | Blt(x, y, l) -> brOp OpCodes.Blt x y l
+            | Bgt(x, y, l) -> brOp OpCodes.Bgt x y l
+            | Ble(x, y, l) -> brOp OpCodes.Ble x y l
+            | Bge(x, y, l) -> brOp OpCodes.Bge x y l
+            | Brtrue(x, l) ->
+                emitExp x
+                il.Emit(OpCodes.Brtrue, l)
+            | Brfalse(x, l) ->
+                emitExp x
+                il.Emit(OpCodes.Brfalse, l)
             | Seq(x, y) ->
                 emitStm x
                 emitStm y
@@ -341,6 +337,11 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | Ret(x) ->
                 match x with | Some(y) -> emitExp y | None -> ()
                 il.Emit(OpCodes.Ret)
+
+        and brOp op left right label =
+            emitExp left
+            emitExp right
+            il.Emit(op, getLabel label)
 
         and callFunc l args =
             match l.Parent with

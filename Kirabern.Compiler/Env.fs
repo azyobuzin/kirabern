@@ -29,10 +29,7 @@ let baseVEnv =
         let l = Level("$not", Types.Int, None)
         let var = Var(l.AddParameter("value", Types.Int, false))
         let t, f = newLabel(), newLabel()
-        l.Body <- Seq(CJump(Eq, var, Const 0, t, f),
-            Seq(MarkLabel f,
-                Seq(Ret(Some(Const 0)),
-                    Seq(MarkLabel t, Ret(Some(Const 1))))))
+        l.Body <- Ret(Some(Ceq(var, LdcI4(0))))
         "not", 
         FunEntry { level = l
                    formals = [ "value", Types.Int ]
@@ -41,7 +38,7 @@ let baseVEnv =
     let lenEntry = 
         let l = Level("$len", Types.Int, None)
         let arg = Var(l.AddParameter("array", Types.ArrayType, false))
-        l.Body <- Ret(Some(ConvI4(ArrayLength(arg))))
+        l.Body <- Ret(Some(ConvI4(Ldlen(arg))))
         "len", 
         FunEntry { level = l
                    formals = [ "array", Types.ArrayType ]
