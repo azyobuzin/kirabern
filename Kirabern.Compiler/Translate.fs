@@ -56,17 +56,34 @@ let callExp (func: Level) args =
 let opExp oper left right =
     let left, right = unEx left, unEx right
     let not x = Ceq(x, LdcI4(0))
-    Ex(match oper with
-       | Absyn.PlusOp -> Add(left, right)
-       | Absyn.MinusOp -> Sub(left, right)
-       | Absyn.TimesOp -> Mul(left, right)
-       | Absyn.DivideOp -> Div(left, right)
-       | Absyn.EqOp -> Ceq(left, right)
-       | Absyn.NeqOp -> not(Ceq(left, right))
-       | Absyn.LtOp -> Clt(left, right)
-       | Absyn.LeOp -> not(Cgt(left, right))
-       | Absyn.GtOp -> Cgt(left, right)
-       | Absyn.GeOp -> not(Clt(left, right)))
+    Ex(
+        match left, right with
+        | LdcI4(x), LdcI4(y) ->
+            let bi b = if b then 1 else 0
+            LdcI4(
+                match oper with
+                | Absyn.PlusOp -> x + y
+                | Absyn.MinusOp -> x - y
+                | Absyn.TimesOp -> x * y
+                | Absyn.DivideOp -> x / y
+                | Absyn.EqOp -> bi(x = y)
+                | Absyn.NeqOp -> bi(x <> y)
+                | Absyn.LtOp -> bi(x < y)
+                | Absyn.LeOp -> bi(x <= y)
+                | Absyn.GtOp -> bi(x > y)
+                | Absyn.GeOp -> bi(x >= y))
+        | _ ->
+            match oper with
+            | Absyn.PlusOp -> Add(left, right)
+            | Absyn.MinusOp -> Sub(left, right)
+            | Absyn.TimesOp -> Mul(left, right)
+            | Absyn.DivideOp -> Div(left, right)
+            | Absyn.EqOp -> Ceq(left, right)
+            | Absyn.NeqOp -> not(Ceq(left, right))
+            | Absyn.LtOp -> Clt(left, right)
+            | Absyn.LeOp -> not(Cgt(left, right))
+            | Absyn.GtOp -> Cgt(left, right)
+            | Absyn.GeOp -> not(Clt(left, right)))
 
 let recordExp record fields =
     let tmp = newTemp(Types.Record record)
