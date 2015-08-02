@@ -79,12 +79,11 @@ let ifElseVoid test then' else' =
              MarkLabel(finish) ])
 
 let ifElseExp test then' else' =
-    let t, f, finish = newLabel(), newLabel(), newLabel()
+    let t, finish = newLabel(), newLabel()
     Ex(IfExp { test = Brtrue(unEx test, t)
                thenExp = unEx then'
                thenLabel = t
                elseExp = unEx else'
-               elseLabel = f
                endLabel = finish })
 
 let whileExp test body breakLabel =
@@ -96,12 +95,13 @@ let whileExp test body breakLabel =
              MarkLabel(breakLabel) ])
 
 let forExp var lo hi body breakLabel =
-    let start, bodyLabel, incLabel = newLabel(), newLabel(), newLabel()
-    let hiTmp = newTemp Types.Int
+    let bodyLabel = newLabel()
     let hiExp, hiInit =
         match hi with
         | Ex(LdcI4(_) as x) | Ex(Var(_) as x) -> x, []
-        | _ -> Var hiTmp, [Store(Var hiTmp, unEx hi)]
+        | _ ->            
+            let hiTmp = Var(newTemp Types.Int)
+            hiTmp, [Store(hiTmp, unEx hi)]
     let var = Var(var)
     let header = Store(var, unEx lo) :: hiInit
     Nx(seq (header @ [ Bgt(var, hiExp, breakLabel)

@@ -43,7 +43,7 @@ and Stm =
     | Nop
     | Ret of Exp option
 
-and IfExpInfo = { test: Stm; thenExp: Exp; thenLabel: Label; elseExp: Exp; elseLabel: Label; endLabel: Label }
+and IfExpInfo = { test: Stm; thenExp: Exp; thenLabel: Label; elseExp: Exp; endLabel: Label }
 
 and Variable =
     | NamedVariable of Level * string * Types.Ty * UniqueId

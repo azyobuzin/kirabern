@@ -106,7 +106,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                 |> Seq.map (fun (_, ty, _) -> univ.ReflectionType(ty))
                 |> Seq.toArray)
         level.Parameters |> Seq.iteri (fun i (name, _, _) ->
-            m.DefineParameter(i, ParameterAttributes.None, name) |> ignore)
+            m.DefineParameter((if isStatic then i else i + 1), ParameterAttributes.None, name) |> ignore)
         m
 
     member this.MethodBuilder = methodBuilder
@@ -265,7 +265,6 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | CallStaticMethodExp(m, args, _) -> callStaticMethod m args
             | IfExp(x) ->
                 emitStm x.test
-                emitStm(MarkLabel(x.elseLabel))
                 emitExp x.elseExp
                 emitStm(Br(x.endLabel))
                 emitStm(MarkLabel(x.thenLabel))
@@ -324,10 +323,10 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | Bge(x, y, l) -> brOp OpCodes.Bge x y l
             | Brtrue(x, l) ->
                 emitExp x
-                il.Emit(OpCodes.Brtrue, l)
+                il.Emit(OpCodes.Brtrue, getLabel l)
             | Brfalse(x, l) ->
                 emitExp x
-                il.Emit(OpCodes.Brfalse, l)
+                il.Emit(OpCodes.Brfalse, getLabel l)
             | Seq(x, y) ->
                 emitStm x
                 emitStm y
