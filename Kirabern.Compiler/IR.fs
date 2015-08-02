@@ -36,6 +36,7 @@ and Stm =
     | Bgt of Exp * Exp * Label
     | Ble of Exp * Exp * Label
     | Bge of Exp * Exp * Label
+    | BneUn of Exp * Exp * Label
     | Brtrue of Exp * Label
     | Brfalse of Exp * Label
     | Seq of Stm * Stm
@@ -43,7 +44,7 @@ and Stm =
     | Nop
     | Ret of Exp option
 
-and IfExpInfo = { test: Stm; thenExp: Exp; thenLabel: Label; elseExp: Exp; endLabel: Label }
+and IfExpInfo = { test: Stm; firstExp: Exp; label: Label; secondExp: Exp; }
 
 and Variable =
     | NamedVariable of Level * string * Types.Ty * UniqueId
@@ -118,5 +119,5 @@ let rec getExpTy =
     | Ldlen(_) -> Types.Int
     | CallExp(l, _) -> l.ReturnType
     | CallStaticMethodExp(_, _, x) -> x
-    | IfExp(x) -> getExpTy x.thenExp
+    | IfExp(x) -> getExpTy x.firstExp
     | ESeq(_, x) -> getExpTy x

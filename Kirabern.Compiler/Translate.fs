@@ -6,7 +6,7 @@ type Exp =
     | Ex of IR.Exp
     | Nx of IR.Stm
 
-let rec seq =
+let rec private seq =
     function
     | [] -> invalidArg "stms" "empty"
     | [x] -> x
@@ -17,9 +17,26 @@ let unEx =
     | Ex(x) -> x
     | Nx(_) -> failwith "Nx -> Ex"
 
+let rec private expToStm =
+    function
+    | LdcI4(_) | Ldstr(_) | Ldnull | NewRecord(_) | Var(_) -> Nop
+    | Neg(x) | ConvI4(x) | NewArray(_, x) | Field(x, _, _) | Ldlen(x) -> expToStm x
+    | Ceq(x, y) | Cgt(x, y) | Clt(x, y) | Add(x, y) | Sub(x, y) | Mul(x, y) | Div(x, y) | Ldelem(x, y) ->
+        Seq(expToStm x, expToStm y)
+    | CallExp(_) | CallStaticMethodExp(_) as x -> Pop(x)
+    | IfExp(x) ->
+        let endLabel = newLabel()
+        seq [ x.test
+              expToStm x.firstExp
+              Br(endLabel)
+              MarkLabel(x.label)
+              expToStm x.secondExp
+              MarkLabel(endLabel) ]
+    | ESeq(x, y) -> Seq(x, expToStm y)
+
 let unNx =
     function
-    | Ex(x) -> Pop(x)
+    | Ex(x) -> expToStm x
     | Nx(x) -> x
 
 let nullExp = Ex(Ldnull)
@@ -63,36 +80,118 @@ let recordExp record fields =
 let assignExp left right =
     Nx(Store(unEx left, unEx right))
 
+type private BranchResult =
+    | JumpToThen of Stm
+    | JumpToElse of Stm
+    | ThenOnly
+    | ElseOnly
+
+let private revBranch =
+    function
+    | JumpToThen(x) -> JumpToElse(x)
+    | JumpToElse(x) -> JumpToThen(x)
+    | ThenOnly -> ElseOnly
+    | ElseOnly -> ThenOnly
+
+let rec private branch exp label =
+    match exp with
+    | Ceq(x, LdcI4(0)) | Ceq(LdcI4(0), x) -> revBranch(branch x label)
+    | Ceq(x, y) -> JumpToThen(Beq(x, y, label))
+    | Cgt(x, y) -> JumpToThen(Bgt(x, y, label))
+    | Clt(x, y) -> JumpToThen(Blt(x, y, label))
+    | Ldnull | LdcI4(0) -> ElseOnly
+    | LdcI4(_) -> ThenOnly
+    | CallExp(func, [x]) when func.Name = "$not" -> revBranch(branch x label)
+    | _ -> JumpToThen(Brtrue(exp, label))
+
+let rec private brfalse exp label =
+    let revBrOp =
+        function
+        | Some(s) ->
+            match s with
+            | Beq(x, y, l) -> Some(BneUn(x, y, l))
+            | Blt(x, y, l) -> Some(Bge(x, y, l))
+            | Bgt(x, y, l) -> Some(Ble(x, y, l))
+            | Ble(x, y, l) -> Some(Bgt(x, y, l))
+            | Bge(x, y, l) -> Some(Blt(x, y, l))
+            | BneUn(x, y, l) -> Some(Beq(x, y, l))
+            | Brtrue(x, l) -> Some(Brfalse(x, l))
+            | Brfalse(x, l) -> Some(Brtrue(x, l))
+            | Br(_) -> None
+            | _ -> failwith "unreachable"
+        | None -> Some(Br(label))
+
+    match exp with
+    | Ceq(x, LdcI4(0)) | Ceq(LdcI4(0), x) -> revBrOp(brfalse x label)
+    | Ceq(x, y) -> Some(BneUn(x, y, label))
+    | Cgt(x, y) -> Some(Ble(x, y, label))
+    | Clt(x, y) -> Some(Bge(x, y, label))
+    | Ldnull | LdcI4(0) -> Some(Br(label))
+    | LdcI4(_) -> None
+    | CallExp(func, [x]) when func.Name = "$not" -> revBrOp(brfalse x label)
+    | _ -> Some(Brfalse(exp, label))
+    
 let ifThen test then' =
-    let f = newLabel()
-    Nx(seq [ Brfalse(unEx test, f)
-             unNx then'
-             MarkLabel(f) ])
+    let falseLabel = newLabel()
+    match brfalse (unEx test) falseLabel with
+    | Some(Br(_)) -> Nx(Nop)
+    | Some(s) ->
+        Nx(seq [ s
+                 unNx then'
+                 MarkLabel(falseLabel) ])
+    | None -> then'
 
 let ifElseVoid test then' else' =
-    let t, finish = newLabel(), newLabel()
-    Nx(seq [ Brtrue(unEx test, t)
-             unNx else'
-             Br(finish)
-             MarkLabel(t)
-             unNx then'
-             MarkLabel(finish) ])
+    let label, endLabel = newLabel(), newLabel()
+    match branch (unEx test) label with
+    | JumpToThen(x) ->
+        Nx(seq [ x
+                 unNx else'
+                 Br(endLabel)
+                 MarkLabel(label)
+                 unNx then'
+                 MarkLabel(endLabel) ])
+    | JumpToElse(x) ->
+        Nx(seq [ x
+                 unNx then'
+                 Br(endLabel)
+                 MarkLabel(label)
+                 unNx else'
+                 MarkLabel(endLabel) ])
+    | ThenOnly -> then'
+    | ElseOnly -> else'
 
 let ifElseExp test then' else' =
-    let t, finish = newLabel(), newLabel()
-    Ex(IfExp { test = Brtrue(unEx test, t)
-               thenExp = unEx then'
-               thenLabel = t
-               elseExp = unEx else'
-               endLabel = finish })
+    let label = newLabel()
+    match branch (unEx test) label with
+    | JumpToThen(x) ->
+        Ex(IfExp { test = x
+                   firstExp = unEx else'
+                   label = label
+                   secondExp = unEx then' })
+    | JumpToElse(x) ->
+        Ex(IfExp { test = x
+                   firstExp = unEx then'
+                   label = label
+                   secondExp = unEx else' })
+    | ThenOnly -> then'
+    | ElseOnly -> else'
 
 let whileExp test body breakLabel =
     let start = newLabel()
-    Nx(seq [ MarkLabel(start)
-             Brfalse(unEx test, breakLabel)
-             unNx body
-             Br(start)
-             MarkLabel(breakLabel) ])
+    match brfalse (unEx test) breakLabel with
+    | Some(Br(_)) -> Nx(Nop)
+    | Some(s) -> 
+        Nx(seq [ MarkLabel(start)
+                 s
+                 unNx body
+                 Br(start)
+                 MarkLabel(breakLabel) ])
+    | None -> 
+        Nx(seq [ MarkLabel(start)
+                 unNx body
+                 Br(start)
+                 MarkLabel(breakLabel) ])
 
 let forExp var lo hi body breakLabel =
     let bodyLabel = newLabel()

@@ -264,12 +264,13 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | CallExp(l, args) -> callFunc l args
             | CallStaticMethodExp(m, args, _) -> callStaticMethod m args
             | IfExp(x) ->
+                let endLabel = il.DefineLabel()
                 emitStm x.test
-                emitExp x.elseExp
-                emitStm(Br(x.endLabel))
-                emitStm(MarkLabel(x.thenLabel))
-                emitExp x.thenExp
-                emitStm(MarkLabel(x.endLabel))
+                emitExp x.firstExp
+                il.Emit(OpCodes.Br, endLabel)
+                emitStm(MarkLabel(x.label))
+                emitExp x.secondExp
+                il.MarkLabel(endLabel)
             | ESeq(x, y) ->
                 emitStm x
                 emitExp y
@@ -321,6 +322,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | Bgt(x, y, l) -> brOp OpCodes.Bgt x y l
             | Ble(x, y, l) -> brOp OpCodes.Ble x y l
             | Bge(x, y, l) -> brOp OpCodes.Bge x y l
+            | BneUn(x, y, l) -> brOp OpCodes.Bne_Un x y l
             | Brtrue(x, l) ->
                 emitExp x
                 il.Emit(OpCodes.Brtrue, getLabel l)
