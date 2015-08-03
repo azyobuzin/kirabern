@@ -76,3 +76,14 @@ while, for, to, break, var, fn, type, new, if, else, null, true, false
 
 ## プログラム
 * exp; exp; ... exp;
+
+## 組み込み関数
+* print(value: string)
+* println(value: string)
+* readLine() -> string
+* parseInt(s: string) -> int
+* intToString(value: int) -> string
+* not(value: int) -> int
+* len(array: 任意の配列) -> int
+* getArgs() -> string[]
+* exit(exitCode: int)
