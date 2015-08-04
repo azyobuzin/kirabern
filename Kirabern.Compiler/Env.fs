@@ -81,6 +81,7 @@ let baseVEnv =
     
     Map.ofArray [| entry "print" (typeof<Console>.GetMethod("Write", [| typeof<string> |])) [ "value", Types.String ] Types.Void
                    entry "println" (typeof<Console>.GetMethod("WriteLine", [| typeof<string> |])) [ "value", Types.String ] Types.Void
+                   entry "read" (typeof<Console>.GetMethod("Read")) [] Types.Int
                    entry "readln" (typeof<Console>.GetMethod("ReadLine")) [] Types.String                   
                    entry "parseInt" (typeof<int>.GetMethod("Parse", [| typeof<string> |])) [ "s", Types.String ] Types.Int
                    entry "intToStr" (typeof<Convert>.GetMethod("ToString", [| typeof<int32> |])) [ "value", Types.Int ] Types.String

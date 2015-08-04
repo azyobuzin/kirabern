@@ -1,0 +1,62 @@
+fn brainfuck(code: int[]) {
+    var mem = new int[30000];
+    var ptr = 0;
+    var codePtr = 0;
+
+    type list = { head: int, tail: list };
+    var loopStack: list = null;
+
+    while (codePtr < len(code)) {
+        var c = code[codePtr];
+        if (c == 62) // >
+            ptr = ptr + 1
+        else if (c == 60) // <
+            ptr = ptr - 1
+        else if (c == 43) // +
+            mem[ptr] = mem[ptr] + 1
+        else if (c == 45) // -
+            mem[ptr] = mem[ptr] - 1
+        else if (c == 46) // .
+        {
+            var a = new int[1];
+            a[0] = mem[ptr];
+            print(arrayToStr(a));
+        }
+        else if (c == 44) // ,
+            mem[ptr] = read()
+        else if (c == 91) // [
+        {
+            if (mem[ptr] == 0) {
+                // ] までジャンプ
+                var i = 0;
+                while (i > 0) {
+                    codePtr = codePtr + 1;
+                    c = code[codePtr];
+                    if (c == 91) i = i + 1
+                    else if (c == 93) i = i - 1;
+                };
+            } else {
+                // スタックに現在地を追加
+                loopStack = new list { head = codePtr, tail = loopStack };
+            };
+        }
+        else if (c == 93) // ]
+        {
+            if (mem[ptr] == 0) {
+                // ループ終了
+                loopStack = loopStack.tail;
+            } else {
+                // [ までジャンプ
+                codePtr = loopStack.head;
+            };
+        };
+        codePtr = codePtr + 1;
+    };
+};
+
+var args = getArgs();
+var code =
+    if (len(args) == 1) readln()
+    else args[1];
+
+brainfuck(strToArray(code));

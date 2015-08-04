@@ -32,10 +32,10 @@ type Universe(moduleBuilder: ModuleBuilder, topClass: TypeBuilder) =
         let mutable ret = null
         if not(createdRecords.TryGetValue(info, &ret)) then
             let t = moduleBuilder.DefineType(info.Name, TypeAttributes.NotPublic ||| TypeAttributes.Sealed ||| TypeAttributes.Class)
+            createdRecords.Add(info, t)
             for (name, ty) in info.Fields do
                 t.DefineField(name, this.ReflectionType(ty), FieldAttributes.Public) |> ignore
             ret <- t.CreateType()
-            createdRecords.Add(info, ret)
         ret
 
     member this.AddClass(t) = classes.Add(t)
