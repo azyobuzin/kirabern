@@ -1,4 +1,5 @@
 ﻿module Kirabern.Compiler.Env
+open System
 open IR
 
 type VarEntryInfo = { access: Variable; ty: Types.Ty }
@@ -18,12 +19,62 @@ let baseVEnv =
         let exps = args |> List.map (fun (name, ty) -> Var(l.AddParameter(name, ty, false)))
         l.Body <- match result with
                   | Types.Void -> 
-                      Seq(CallStaticMethodStm(methodInfo, exps), Ret(None))
-                  | _ -> Ret(Some(CallStaticMethodExp(methodInfo, exps, result)))
+                      Seq(CallCliMethodStm(methodInfo, exps), Ret(None))
+                  | _ -> Ret(Some(CallCliMethodExp(methodInfo, exps, result)))
         name, 
         FunEntry { level = l
                    formals = args
                    result = result }
+
+    let strToArrayEntry =
+        let l = Level("$strToArray", Types.Array(Types.Int), None)
+        let arg = Var(l.AddParameter("s", Types.String, false))
+        let len = Var(newTemp(Types.Int))
+        let resArray = Var(newTemp(Types.Array(Types.Int)))
+        let i = Var(newTemp(Types.Int))
+        let loopStart = newLabel()
+        let loopEnd = newLabel()
+        l.Body <- Translate.seq
+            [ Store(len, CallCliMethodExp(typeof<string>.GetMethod("get_Length"), [arg], Types.Int))
+              Store(resArray, NewArray(Types.Int, len))
+              Store(i, LdcI4(0))
+              MarkLabel(loopStart)
+              Bge(i, len, loopEnd)
+              // stelem.i4 で char -> int 変換を行う
+              Store(Ldelem(resArray, i), CallCliMethodExp(typeof<string>.GetMethod("get_Chars"), [ arg; i ], Types.Char))
+              Store(i, Add(i, LdcI4(1)))
+              Br(loopStart)
+              MarkLabel(loopEnd)
+              Ret(Some(resArray)) ]
+        "strToArray",
+        FunEntry { level = l
+                   formals = [ "s", Types.String ]
+                   result = Types.Array(Types.Int) }
+
+    let arrayToStrEntry =
+        let l = Level("$arrayToStr", Types.String, None)
+        let arg = Var(l.AddParameter("array", Types.Array(Types.Int), false))
+        let len = Var(newTemp(Types.Int))
+        let charArray = Var(newTemp(Types.Array(Types.Char)))
+        let i = Var(newTemp(Types.Int))
+        let loopStart = newLabel()
+        let loopEnd = newLabel()
+        l.Body <- Translate.seq
+            [ Store(len, Ldlen(arg))
+              Store(charArray, NewArray(Types.Char, len))
+              Store(i, LdcI4(0))
+              MarkLabel(loopStart)
+              Bge(i, len, loopEnd)
+              // stelem.i2 で int -> char 変換を行う
+              Store(Ldelem(charArray, i), Ldelem(arg, i))
+              Store(i, Add(i, LdcI4(1)))
+              Br(loopStart)
+              MarkLabel(loopEnd)
+              Ret(Some(Newobj(typeof<string>.GetConstructor([| typeof<char[]> |]), [charArray], Types.String))) ]
+        "arrayToStr",
+        FunEntry { level = l
+                   formals = [ "array", Types.Array(Types.Int) ]
+                   result = Types.String }
     
     let notEntry = 
         let l = Level("$not", Types.Int, None)
@@ -44,12 +95,16 @@ let baseVEnv =
                    formals = [ "array", Types.ArrayType ]
                    result = Types.Int }
     
-    Map.ofArray [| entry "print" (typeof<System.Console>.GetMethod("Write", [| typeof<string> |])) [ "value", Types.String ] Types.Void
-                   entry "println" (typeof<System.Console>.GetMethod("WriteLine", [| typeof<string> |])) [ "value", Types.String ] Types.Void
-                   entry "readLine" (typeof<System.Console>.GetMethod("ReadLine")) [] Types.String                   
+    Map.ofArray [| entry "print" (typeof<Console>.GetMethod("Write", [| typeof<string> |])) [ "value", Types.String ] Types.Void
+                   entry "println" (typeof<Console>.GetMethod("WriteLine", [| typeof<string> |])) [ "value", Types.String ] Types.Void
+                   entry "readln" (typeof<Console>.GetMethod("ReadLine")) [] Types.String                   
                    entry "parseInt" (typeof<int>.GetMethod("Parse", [| typeof<string> |])) [ "s", Types.String ] Types.Int
-                   entry "intToString" (typeof<System.Convert>.GetMethod("ToString", [| typeof<int32> |])) [ "value", Types.Int ] Types.String
+                   entry "intToStr" (typeof<Convert>.GetMethod("ToString", [| typeof<int32> |])) [ "value", Types.Int ] Types.String
+                   entry "concat" (typeof<string>.GetMethod("Concat", [| typeof<string>; typeof<string> |])) [ "str0", Types.String; "str1", Types.String ] Types.String
+                   entry "strlen" (typeof<string>.GetMethod("get_Length")) [ "s", Types.String ] Types.Int
+                   strToArrayEntry
+                   arrayToStrEntry
                    notEntry
                    lenEntry
-                   entry "getArgs" (typeof<System.Environment>.GetMethod("GetCommandLineArgs")) [] (Types.Array(Types.String))
-                   entry "exit" (typeof<System.Environment>.GetMethod("Exit")) [ "exitCode", Types.Int ] Types.Void |]
+                   entry "getArgs" (typeof<Environment>.GetMethod("GetCommandLineArgs")) [] (Types.Array(Types.String))
+                   entry "exit" (typeof<Environment>.GetMethod("Exit")) [ "exitCode", Types.Int ] Types.Void |]

@@ -6,7 +6,7 @@ type Exp =
     | Ex of IR.Exp
     | Nx of IR.Stm
 
-let rec private seq =
+let rec seq =
     function
     | [] -> invalidArg "stms" "empty"
     | [x] -> x
@@ -17,13 +17,16 @@ let unEx =
     | Ex(x) -> x
     | Nx(_) -> failwith "Nx -> Ex"
 
+/// <summary>
+/// 副作用のない式を排除して、できるだけ軽量なステートメントをつくる。
+/// </summary>
 let rec private expToStm =
     function
     | LdcI4(_) | Ldstr(_) | Ldnull | NewRecord(_) | Var(_) -> Nop
     | Neg(x) | ConvI4(x) | NewArray(_, x) | Field(x, _, _) | Ldlen(x) -> expToStm x
     | Ceq(x, y) | Cgt(x, y) | Clt(x, y) | Add(x, y) | Sub(x, y) | Mul(x, y) | Div(x, y) | Ldelem(x, y) ->
         Seq(expToStm x, expToStm y)
-    | CallExp(_) | CallStaticMethodExp(_) as x -> Pop(x)
+    | CallExp(_) | CallCliMethodExp(_) | Newobj(_) as x -> Pop(x)
     | IfExp(x) ->
         let endLabel = newLabel()
         seq [ x.test
@@ -110,6 +113,9 @@ let private revBranch =
     | ThenOnly -> ElseOnly
     | ElseOnly -> ThenOnly
 
+/// <summary>
+/// 比較式からジャンプ命令を作成し、コードの順番を指示します。
+/// </summary>
 let rec private branch exp label =
     match exp with
     | Ceq(x, LdcI4(0)) | Ceq(LdcI4(0), x) -> revBranch(branch x label)
@@ -121,6 +127,9 @@ let rec private branch exp label =
     | CallExp(func, [x]) when func.Name = "$not" -> revBranch(branch x label)
     | _ -> JumpToThen(Brtrue(exp, label))
 
+/// <summary>
+/// 比較式が <c>false</c> に値するときにジャンプする命令を作成します。
+/// </summary>
 let rec private brfalse exp label =
     let revBrOp =
         function

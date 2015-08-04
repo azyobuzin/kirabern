@@ -16,5 +16,5 @@ for (i = 1 to 100)
             mulOfFive = mulOfFive + 5;
             "Buzz"
         }
-        else intToString(i)
+        else intToStr(i)
     );

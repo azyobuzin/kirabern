@@ -20,6 +20,7 @@ type Universe(moduleBuilder: ModuleBuilder, topClass: TypeBuilder) =
         match Types.actualTy ty with
         | Types.Null -> typeof<obj>
         | Types.Int -> typeof<int>
+        | Types.Char -> typeof<char>
         | Types.String -> typeof<string>
         | Types.Record(x) -> this.GetOrCreateRecordType(x)
         | Types.Array(x) -> this.ReflectionType(x).MakeArrayType()
@@ -106,7 +107,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                 |> Seq.map (fun (_, ty, _) -> univ.ReflectionType(ty))
                 |> Seq.toArray)
         level.Parameters |> Seq.iteri (fun i (name, _, _) ->
-            m.DefineParameter((if isStatic then i else i + 1), ParameterAttributes.None, name) |> ignore)
+            m.DefineParameter(i + 1, ParameterAttributes.None, name) |> ignore)
         m
 
     member this.MethodBuilder = methodBuilder
@@ -236,6 +237,9 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | ConvI4(x) ->
                 emitExp x
                 il.Emit(OpCodes.Conv_I4)
+            | Newobj(ctor, xs, _) ->
+                List.iter emitExp xs
+                il.Emit(OpCodes.Newobj, ctor)
             | NewRecord(x) -> il.Emit(OpCodes.Newobj, univ.GetOrCreateRecordType(x).GetConstructor(Type.EmptyTypes))
             | NewArray(ty, size) ->
                 emitExp size
@@ -256,13 +260,14 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                 il.Emit(
                     match Types.actualTy(getExpTy arr) with
                     | Types.Array(Types.Int) -> OpCodes.Ldelem_I4
+                    | Types.Array(Types.Char) -> OpCodes.Ldelem_U2
                     | Types.Array(_) -> OpCodes.Ldelem_Ref
                     | _ -> failwith "ldelem: not an array")
             | Ldlen(x) ->
                 emitExp x
                 il.Emit(OpCodes.Ldlen)
             | CallExp(l, args) -> callFunc l args
-            | CallStaticMethodExp(m, args, _) -> callStaticMethod m args
+            | CallCliMethodExp(m, args, _) -> callStaticMethod m args
             | IfExp(x) ->
                 let endLabel = il.DefineLabel()
                 emitStm x.test
@@ -308,6 +313,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                     il.Emit(
                         match Types.actualTy(getExpTy arr) with
                         | Types.Array(Types.Int) -> OpCodes.Stelem_I4
+                        | Types.Array(Types.Char) -> OpCodes.Stelem_I2
                         | Types.Array(_) -> OpCodes.Stelem_Ref
                         | _ -> failwith "stelem: not an array")
                 | _ -> failwith "invalid left"
@@ -315,7 +321,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                 emitExp x
                 il.Emit(OpCodes.Pop)
             | CallStm(l, args) -> callFunc l args
-            | CallStaticMethodStm(m, args) -> callStaticMethod m args
+            | CallCliMethodStm(m, args) -> callStaticMethod m args
             | Br(x) -> il.Emit(OpCodes.Br, getLabel x)
             | Beq(x, y, l) -> brOp OpCodes.Beq x y l
             | Blt(x, y, l) -> brOp OpCodes.Blt x y l

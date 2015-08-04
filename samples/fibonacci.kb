@@ -18,5 +18,5 @@ if (len(args) == 1)
 else {
     var n = parseInt(args[1]);
     var result = fibonacci(n);
-    println(intToString(result));
+    println(intToStr(result));
 };

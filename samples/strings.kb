@@ -1,0 +1,30 @@
+var x = "こころ";
+
+// "こころ" + "ぴょんぴょん"
+var y = concat(x, "ぴょんぴょん");
+println(y);
+
+// "こころぴょんぴょん" 9文字
+println(intToStr(strlen(y)));
+
+// "こころ" を UTF-16 の値として列挙
+var arr1 = strToArray(x);
+for (i = 0 to len(arr1) - 1)
+    println(intToStr(arr1[i]));
+
+// "ご注文はココアちゃんです！" を UTF-16 から作成
+var arr2 = new int[13];
+arr2[0] = 12372;
+arr2[1] = 27880;
+arr2[2] = 25991;
+arr2[3] = 12399;
+arr2[4] = 12467;
+arr2[5] = 12467;
+arr2[6] = 12450;
+arr2[7] = 12385;
+arr2[8] = 12419;
+arr2[9] = 12435;
+arr2[10] = 12391;
+arr2[11] = 12377;
+arr2[12] = 65281;
+println(arrayToStr(arr2));

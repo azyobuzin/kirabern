@@ -14,6 +14,7 @@ type Exp =
     | Div of Exp * Exp
     | Neg of Exp
     | ConvI4 of Exp
+    | Newobj of System.Reflection.ConstructorInfo * Exp list * Types.Ty
     | NewRecord of Types.RecordInfo
     | NewArray of Types.Ty * Exp
     | Var of Variable
@@ -21,7 +22,7 @@ type Exp =
     | Ldelem of Exp * Exp
     | Ldlen of Exp
     | CallExp of Level * Exp list
-    | CallStaticMethodExp of System.Reflection.MethodInfo * Exp list * Types.Ty
+    | CallCliMethodExp of System.Reflection.MethodInfo * Exp list * Types.Ty
     | IfExp of IfExpInfo
     | ESeq of Stm * Exp
 
@@ -29,7 +30,7 @@ and Stm =
     | Store of Exp * Exp
     | Pop of Exp
     | CallStm of Level * Exp list
-    | CallStaticMethodStm of System.Reflection.MethodInfo * Exp list
+    | CallCliMethodStm of System.Reflection.MethodInfo * Exp list
     | Br of Label
     | Beq of Exp * Exp * Label
     | Blt of Exp * Exp * Label
@@ -106,6 +107,7 @@ let rec getExpTy =
     | Ceq(_) | Cgt(_) | Clt(_)
     | Add(_) | Sub(_) | Mul(_) | Div(_)
     | Neg(_) | ConvI4(_) -> Types.Int
+    | Newobj(_, _, x) -> x
     | NewRecord(x) -> Types.Record(x)
     | NewArray(x, _) -> Types.Array(x)
     | Var(x) -> getVarTy x
@@ -118,6 +120,6 @@ let rec getExpTy =
         | y -> failwith(sprintf "%O is not array" y)
     | Ldlen(_) -> Types.Int
     | CallExp(l, _) -> l.ReturnType
-    | CallStaticMethodExp(_, _, x) -> x
+    | CallCliMethodExp(_, _, x) -> x
     | IfExp(x) -> getExpTy x.firstExp
     | ESeq(_, x) -> getExpTy x

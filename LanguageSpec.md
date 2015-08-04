@@ -80,9 +80,13 @@ while, for, to, break, var, fn, type, new, if, else, null, true, false
 ## 組み込み関数
 * print(value: string)
 * println(value: string)
-* readLine() -> string
+* readln() -> string
 * parseInt(s: string) -> int
-* intToString(value: int) -> string
+* intToStr(value: int) -> string
+* concat(str0: string, str1: string) -> string
+* strlen(s: string) -> int
+* strToArray(s: string) -> int[]
+* arrayToStr(array: int[]) -> string
 * not(value: int) -> int
 * len(array: 任意の配列) -> int
 * getArgs() -> string[]

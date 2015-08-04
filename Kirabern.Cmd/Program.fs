@@ -36,6 +36,8 @@ let main argv =
             1
     with
     | :? Main.ParsingException as ex ->
+        if ex.InnerException <> null then
+            printfn "%O\n" ex.InnerException
         let errors =
             ex.Errors |> Seq.map (fun e ->
                 let startPos, endPos = e.position

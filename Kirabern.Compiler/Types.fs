@@ -4,6 +4,7 @@ open System
 type Ty = 
     | Null
     | Int
+    | Char
     | String
     | Record of RecordInfo
     | Array of Ty
@@ -14,6 +15,7 @@ type Ty =
         match x with
         | Null -> "null"
         | Int -> "int"
+        | Char -> "char"
         | String -> "string"
         | Record(x) -> 
             sprintf "{ %s }" (String.Join(", ", x.Fields |> Seq.map (fun (n, ty) -> sprintf "%s: %O" n ty)))
