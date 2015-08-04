@@ -91,19 +91,19 @@ let rec transExp ((venv: VEnv, tenv: TEnv) as env) (level: IR.Level) breakLabel 
         | CallExp(x) ->
             let func, funcpos = x.func
             match venv.TryFind(func) with
-            | Some(FunEntry f) ->
-                if x.args.Length <> f.formals.Length then
-                    raise (newError(x.pos, sprintf "関数 '%s' には %d 個の引数が必要ですが、実際には %d 個指定されています。" func f.formals.Length x.args.Length))
+            | Some(FunEntry(l)) ->
+                if x.args.Length <> l.Parameters.Count then
+                    raise (newError(x.pos, sprintf "関数 '%s' には %d 個の引数が必要ですが、実際には %d 個指定されています。" func l.Parameters.Count x.args.Length))
 
                 let args =
-                    Seq.zip x.args f.formals
-                    |> checkedMap (fun ((arg, argpos), (prmname, formal)) ->
+                    Seq.zip x.args l.Parameters
+                    |> checkedMap (fun ((arg, argpos), (prmname, formal, _)) ->
                         let arg = trexp arg
                         if not(cmpTy arg.ty formal) then
                             raise (newError(argpos, sprintf "パラメータ '%s' は型 %O ですが、実際には %O が指定されています。" prmname formal arg.ty))
                         arg.exp)
 
-                { exp = Translate.callExp f.level args; ty = actualTy f.result }
+                { exp = Translate.callExp l args; ty = actualTy l.ReturnType }
             | Some(_) -> raise (newError(funcpos, sprintf "'%s' は関数ではないシンボルです。" func))
             | None -> raise (symbolNotExists(func, funcpos))
 
@@ -266,14 +266,9 @@ and transDec ((venv, tenv) as env) level breakLabel dec =
                 | None -> Types.Void
             x, level.CreateChild(sprintf "%s@%d" name startPos.AbsoluteOffset, returnType)
         )
-        let f (tbl: VEnv) (dec, newLevel) =
-            let formals =
-                dec.params'
-                |> List.map (fun x ->
-                    let name, _ = x.name
-                    name, getty x.typ)
+        let f (tbl: VEnv) (dec: FunDecInfo, newLevel) =
             let name, _ = dec.name
-            tbl.Add(name, FunEntry { level = newLevel; formals = formals; result = newLevel.ReturnType })
+            tbl.Add(name, FunEntry(newLevel))
         let venv' = List.fold f venv decs
         decs |> loopToCheck (fun (x, newLevel) ->
             let prmNames = HashSet()

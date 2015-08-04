@@ -3,11 +3,10 @@ open System
 open IR
 
 type VarEntryInfo = { access: Variable; ty: Types.Ty }
-type FunEntryInfo = { level: Level; formals: (string * Types.Ty) list; result: Types.Ty }
 
 type Entry =
     | VarEntry of VarEntryInfo
-    | FunEntry of FunEntryInfo
+    | FunEntry of Level
 
 let baseTEnv =
     Map.ofArray [| "int", Types.Int
@@ -21,10 +20,7 @@ let baseVEnv =
                   | Types.Void -> 
                       Seq(CallCliMethodStm(methodInfo, exps), Ret(None))
                   | _ -> Ret(Some(CallCliMethodExp(methodInfo, exps, result)))
-        name, 
-        FunEntry { level = l
-                   formals = args
-                   result = result }
+        name, FunEntry(l)
 
     let strToArrayEntry =
         let l = Level("$strToArray", Types.Array(Types.Int), None)
@@ -46,10 +42,7 @@ let baseVEnv =
               Br(loopStart)
               MarkLabel(loopEnd)
               Ret(Some(resArray)) ]
-        "strToArray",
-        FunEntry { level = l
-                   formals = [ "s", Types.String ]
-                   result = Types.Array(Types.Int) }
+        "strToArray", FunEntry(l)
 
     let arrayToStrEntry =
         let l = Level("$arrayToStr", Types.String, None)
@@ -71,29 +64,20 @@ let baseVEnv =
               Br(loopStart)
               MarkLabel(loopEnd)
               Ret(Some(Newobj(typeof<string>.GetConstructor([| typeof<char[]> |]), [charArray], Types.String))) ]
-        "arrayToStr",
-        FunEntry { level = l
-                   formals = [ "array", Types.Array(Types.Int) ]
-                   result = Types.String }
-    
+        "arrayToStr", FunEntry(l)
+
     let notEntry = 
         let l = Level("$not", Types.Int, None)
         let var = Var(l.AddParameter("value", Types.Int, false))
         let t, f = newLabel(), newLabel()
         l.Body <- Ret(Some(Ceq(var, LdcI4(0))))
-        "not", 
-        FunEntry { level = l
-                   formals = [ "value", Types.Int ]
-                   result = Types.Int }
+        "not", FunEntry(l)
 
     let lenEntry = 
         let l = Level("$len", Types.Int, None)
         let arg = Var(l.AddParameter("array", Types.ArrayType, false))
         l.Body <- Ret(Some(ConvI4(Ldlen(arg))))
-        "len", 
-        FunEntry { level = l
-                   formals = [ "array", Types.ArrayType ]
-                   result = Types.Int }
+        "len", FunEntry(l)
     
     Map.ofArray [| entry "print" (typeof<Console>.GetMethod("Write", [| typeof<string> |])) [ "value", Types.String ] Types.Void
                    entry "println" (typeof<Console>.GetMethod("WriteLine", [| typeof<string> |])) [ "value", Types.String ] Types.Void
