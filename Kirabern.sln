@@ -7,6 +7,11 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Kirabern.Compiler", "Kirabe
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Kirabern.Cmd", "Kirabern.Cmd\Kirabern.Cmd.fsproj", "{14D423A1-C783-4566-83D0-41BBA0D759B3}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Scripts", "Scripts", "{E9FA6464-B38E-4FEC-8FD4-8EC5C2F57D6F}"
+	ProjectSection(SolutionItems) = preProject
+		RegexToNfa.fsx = RegexToNfa.fsx
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
