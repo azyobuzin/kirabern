@@ -56,15 +56,15 @@ and Variable =
 
 and Level(name: string, returnType: Types.Ty, parent: Level option) =
     let parameters = System.Collections.Generic.List<string * Types.Ty * bool>()
-    let mutable needsEscapeClass = false
+    let mutable needsCaptureClass = false
     let mutable varNum = 0
     member this.Name = name
     member this.Parent = parent
     member this.ReturnType = returnType
     member this.Parameters = parameters :> System.Collections.Generic.IReadOnlyList<string * Types.Ty * bool>
-    member this.NeedsEscapeClass = needsEscapeClass
+    member this.NeedsCaptureClass = needsCaptureClass
     member this.CreateChild (name, returnType) =
-        needsEscapeClass <- true
+        needsCaptureClass <- true
         Level(name, returnType, Some(this))
     member this.CreateVar (name, ty, escape) =
         if escape then

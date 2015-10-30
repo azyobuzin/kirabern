@@ -8,12 +8,12 @@ type Universe(moduleBuilder: ModuleBuilder, topClass: TypeBuilder) =
     let classes = Collections.Generic.List<TypeBuilder>()
     let createdRecords = Collections.Generic.Dictionary<Types.RecordInfo, Type>()
     let parentFieldTable = Collections.Generic.Dictionary<Level, FieldInfo>()
-    let escapeClassTable = Collections.Generic.Dictionary<Level, Type>()
+    let captureClassTable = Collections.Generic.Dictionary<Level, Type>()
     let emitterTable = Collections.Generic.Dictionary<Level, FunctionEmitter>()
 
     member this.ModuleBuilder = moduleBuilder
     member this.ParentFieldTable = parentFieldTable
-    member this.EscapeClassTable = escapeClassTable
+    member this.CaptureClassTable = captureClassTable
     member this.EmitterTable = emitterTable
     
     member this.ReflectionType(ty) = 
@@ -55,15 +55,15 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
     do univ.EmitterTable.Add(level, this)
 
     let isStatic = level.Parent.IsNone
-    let escapeClass, escapeClassCtor, paramVars =
-        if level.NeedsEscapeClass then
+    let captureClass, captureClassCtor, paramVars =
+        if level.NeedsCaptureClass then
             let t = univ.ModuleBuilder.DefineType(level.Name, TypeAttributes.NotPublic ||| TypeAttributes.Sealed ||| TypeAttributes.Class)
             univ.AddClass(t)
-            univ.EscapeClassTable.Add(level, t)
+            univ.CaptureClassTable.Add(level, t)
 
             let ctor =
                 if not isStatic then
-                    let parentType = univ.EscapeClassTable.[level.Parent.Value]
+                    let parentType = univ.CaptureClassTable.[level.Parent.Value]
                     let fld = t.DefineField("$parent$", parentType, FieldAttributes.Assembly ||| FieldAttributes.InitOnly)
                     univ.ParentFieldTable.Add(level, fld)
                     let ctor = t.DefineConstructor(MethodAttributes.Assembly, CallingConventions.Standard, [| parentType |])
@@ -97,7 +97,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
     let escapedVarTable = Collections.Generic.Dictionary<string, FieldBuilder>()
 
     let methodBuilder =
-        let baseMethodAttr = MethodAttributes.Assembly        
+        let baseMethodAttr = MethodAttributes.Assembly
         let methodAttr = 
             if isStatic then baseMethodAttr ||| MethodAttributes.Static
             else baseMethodAttr ||| MethodAttributes.Final ||| MethodAttributes.Virtual
@@ -117,7 +117,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
         | EscapedNamedVariable(_, name, ty) ->
             let mutable ret = null
             if not(escapedVarTable.TryGetValue(name, &ret)) then
-                ret <- escapeClass.Value.DefineField(name, univ.ReflectionType(ty), FieldAttributes.Assembly)
+                ret <- captureClass.Value.DefineField(name, univ.ReflectionType(ty), FieldAttributes.Assembly)
                 escapedVarTable.Add(name, ret)
             ret
         | EscapedParameterVariable(_, i, _) -> paramVars.[i]
@@ -155,8 +155,8 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             | x when x <= 255 -> il.Emit(OpCodes.Ldarg_S, byte x)
             | x -> il.Emit(OpCodes.Ldarg, int16 x)
 
-        let escapeClassLocal =
-            match escapeClass, escapeClassCtor with
+        let captureClassLocal =
+            match captureClass, captureClassCtor with
             | Some(t), Some(ctor) ->
                 let l = il.DeclareLocal(t)
                 if not isStatic then
@@ -178,7 +178,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
 
         let emitParent (target: Level) =
             if target = level then
-                il.Emit(OpCodes.Ldloc, escapeClassLocal.Value)
+                il.Emit(OpCodes.Ldloc, captureClassLocal.Value)
             else
                 il.Emit(OpCodes.Ldarg_0)
                 if level.Parent.Value <> target then
@@ -188,7 +188,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
                         if p <> target then f p
                     f level.Parent.Value
 
-        let varField var =            
+        let varField var =
             match var with
             | EscapedNamedVariable(l, _, _) | EscapedParameterVariable(l, _, _) ->
                 univ.EmitterTable.[l].GetVariableField(var)
@@ -198,7 +198,7 @@ and FunctionEmitter(univ: Universe, level: Level, container: TypeBuilder) as thi
             let mutable emitter = Unchecked.defaultof<FunctionEmitter>
             if not(univ.EmitterTable.TryGetValue(l, &emitter)) then
                 if l.Parent.IsSome then
-                    emitter <- FunctionEmitter(univ, l, escapeClass.Value)
+                    emitter <- FunctionEmitter(univ, l, captureClass.Value)
                     emitter.Emit()
                     emitter.MethodBuilder
                 else
